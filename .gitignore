@@ -1,0 +1,40 @@
+# Build directories and generated CMake files
+build/
+cmake-build-*/
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+compile_commands.json
+CTestTestfile.cmake
+Testing/
+
+# Compiled artifacts
+*.a
+*.dylib
+*.dll
+*.exe
+*.o
+*.obj
+*.so
+
+# IDE and editor state
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Operating-system metadata
+.DS_Store
+Thumbs.db
+
+# Runtime database files
+*.chronodb
+*.wal
+data/
+
+# Coverage and profiling output
+coverage/
+*.gcda
+*.gcno
+*.profraw
+*.profdata
