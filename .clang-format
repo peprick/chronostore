@@ -1,0 +1,18 @@
+BasedOnStyle: LLVM
+Language: Cpp
+Standard: c++20
+
+IndentWidth: 4
+ContinuationIndentWidth: 4
+ColumnLimit: 100
+
+NamespaceIndentation: None
+PointerAlignment: Left
+ReferenceAlignment: Left
+
+SortIncludes: CaseSensitive
+IncludeBlocks: Preserve
+AccessModifierOffset: -4
+AllowShortFunctionsOnASingleLine: Empty
+FixNamespaceComments: true
+ReflowComments: true
