@@ -11,6 +11,9 @@ add_library(
         STATIC
         src/model.cpp
         src/memtable.cpp
+        src/byte_codec.cpp
+        src/crc32c.cpp
+        src/wal_record.cpp
 )
 
 target_include_directories(

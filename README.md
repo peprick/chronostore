@@ -6,9 +6,10 @@ market-data-style workloads. The project focuses on storage-engine internals:
 durability, binary file formats, indexing, compression, concurrency, crash
 recovery, and measurable performance.
 
-> **Project status:** Milestone 2 is complete. The validated public data model
-> and an ordered in-memory table support insertion, latest-value lookup, and
-> time-range queries. Persistent storage is not implemented yet.
+> **Project status:** Milestone 2 is complete and Milestone 3 is in progress.
+> The data model and ordered in-memory table are joined by portable binary
+> codecs, CRC32C checksums, and a versioned WAL record encoder. WAL file I/O,
+> synchronization, decoding, and crash recovery are not implemented yet.
 
 ## Implemented
 
@@ -18,7 +19,10 @@ recovery, and measurable performance.
 - Deterministic tag ordering and duplicate tag-key rejection.
 - Internal ordered MemTable with last-write-wins updates, latest-value lookup,
   and half-open `[start, end)` range queries.
-- GoogleTest integration with 30 discovered model and MemTable tests.
+- Explicit little-endian byte encoding with bounds-checked reads.
+- Portable CRC32C corruption detection with standard known-answer coverage.
+- Versioned, length-delimited, checksummed WAL `PUT` record encoding.
+- GoogleTest integration with 38 discovered model, MemTable, and codec tests.
 - Project-wide `clang-format` configuration.
 
 ## Project Goals
@@ -98,14 +102,16 @@ tools/chronostore_cli/    Command-line application
 docs/                     Architecture and design documentation
 ```
 
-The library currently implements the public data model. The CLI remains a
-placeholder until the storage engine exposes useful operations.
+The library currently implements the public data model, ordered in-memory
+queries, and the encoding foundation for persistent records. The CLI remains
+a placeholder until the storage engine exposes durable operations.
 
 ## Development Roadmap
 
 1. **Complete:** Establish the CMake build, public data model, and model tests.
 2. **Complete:** Implement an ordered in-memory table and range-query semantics.
-3. **Next:** Add a checksummed write-ahead log and deterministic crash recovery.
+3. **In progress:** Complete WAL decoding, durable append, and deterministic
+   crash recovery on top of the checksummed record format.
 4. Write immutable on-disk segments with versioned binary formats.
 5. Add sparse indexes and streaming multi-segment queries.
 6. Introduce background flushing and a documented concurrency model.

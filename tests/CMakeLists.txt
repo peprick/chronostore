@@ -15,6 +15,9 @@ add_executable(
         chronostore_tests
         model_test.cpp
         memtable_test.cpp
+        byte_codec_test.cpp
+        crc32c_test.cpp
+        wal_record_test.cpp
 )
 
 target_include_directories(
