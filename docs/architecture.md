@@ -63,14 +63,26 @@ occurs, will be configurable and documented before the WAL is implemented.
 
 ### In-Memory Table
 
-The active memory table organizes samples by series and timestamp. Once it
-reaches a configured memory threshold, it becomes immutable and a new active
-table accepts writes. Immutable tables can be queried while a background worker
-flushes them to disk.
+The current MemTable is a volatile, single-threaded reference implementation.
+It uses one ordered map for series and one ordered timestamp map per series.
+Its behavior is explicit:
 
-The first implementation will prefer standard-library containers. Specialized
-allocators or probabilistic structures require profiling evidence before being
-introduced.
+- a repeated `(series, timestamp)` write replaces the previous value;
+- replacement does not increase the logical sample count;
+- `latest` returns the value with the greatest timestamp;
+- ranges are ordered and use half-open `[start, end)` boundaries;
+- an equal-bound range is empty, while a reversed range is invalid;
+- missing series return no latest value and an empty range.
+
+Insertion is `O(log S + log N)`, where `S` is the series count and `N` is the
+sample count for the selected series. A range query returning `K` samples is
+`O(log S + log N + K)`.
+
+The MemTable does not yet enforce a memory threshold, synchronize concurrent
+access, or survive process termination. A later milestone will freeze a full
+table, publish a new active table, and flush the immutable table in the
+background. Specialized allocators or alternative structures require profiling
+evidence before being introduced.
 
 ### Segment Files
 

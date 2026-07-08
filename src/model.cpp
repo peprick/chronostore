@@ -28,14 +28,13 @@ SeriesKey::SeriesKey(std::string measurement, std::vector<Tag> tags)
     }
     // Canonical order makes series identity independent of input tag order.
     std::sort(tags_.begin(), tags_.end());
+    for (std::size_t index = 1; index < tags_.size(); ++index) {
+        const Tag& previous = tags_[index - 1];
+        const Tag& current = tags_[index];
 
-    const auto duplicate =
-        std::adjacent_find(tags_.begin(), tags_.end(), [](const Tag& left, const Tag& right) {
-            return left.key() == right.key();
-        });
-
-    if (duplicate != tags_.end()) {
-        throw std::invalid_argument("duplicate tag key: " + duplicate->key());
+        if (previous.key() == current.key()) {
+            throw std::invalid_argument("duplicate tag key: " + current.key());
+        }
     }
 }
 

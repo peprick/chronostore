@@ -10,12 +10,15 @@ add_library(
         chronostore
         STATIC
         src/model.cpp
+        src/memtable.cpp
 )
 
 target_include_directories(
         chronostore
         PUBLIC
         ${PROJECT_SOURCE_DIR}/include
+        PRIVATE
+        ${PROJECT_SOURCE_DIR}/src
 )
 
 target_compile_features(

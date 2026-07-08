@@ -6,9 +6,9 @@ market-data-style workloads. The project focuses on storage-engine internals:
 durability, binary file formats, indexing, compression, concurrency, crash
 recovery, and measurable performance.
 
-> **Project status:** Milestone 1 is complete. The public data model, validation
-> rules, CMake build, formatting policy, and model test suite are implemented.
-> Persistent storage and query execution are not implemented yet.
+> **Project status:** Milestone 2 is complete. The validated public data model
+> and an ordered in-memory table support insertion, latest-value lookup, and
+> time-range queries. Persistent storage is not implemented yet.
 
 ## Implemented
 
@@ -16,7 +16,9 @@ recovery, and measurable performance.
 - Validated `Tag`, canonical `SeriesKey`, strong `Timestamp`, and finite `Sample`
   value types.
 - Deterministic tag ordering and duplicate tag-key rejection.
-- GoogleTest integration with 19 discovered model tests.
+- Internal ordered MemTable with last-write-wins updates, latest-value lookup,
+  and half-open `[start, end)` range queries.
+- GoogleTest integration with 30 discovered model and MemTable tests.
 - Project-wide `clang-format` configuration.
 
 ## Project Goals
@@ -102,8 +104,8 @@ placeholder until the storage engine exposes useful operations.
 ## Development Roadmap
 
 1. **Complete:** Establish the CMake build, public data model, and model tests.
-2. **Next:** Implement an ordered in-memory table and range-query semantics.
-3. Add a checksummed write-ahead log and deterministic crash recovery.
+2. **Complete:** Implement an ordered in-memory table and range-query semantics.
+3. **Next:** Add a checksummed write-ahead log and deterministic crash recovery.
 4. Write immutable on-disk segments with versioned binary formats.
 5. Add sparse indexes and streaming multi-segment queries.
 6. Introduce background flushing and a documented concurrency model.
