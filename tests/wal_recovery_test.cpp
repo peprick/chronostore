@@ -254,30 +254,20 @@ TEST_F(WalRecoveryTest, MissingFileReportsSystemError) {
     }
 }
 
-    TEST_F(WalRecoveryTest, RepairsTailAndAllowsNewAppend) {
-    const WalPutRecord first =
-        recovery_first_record();
+TEST_F(WalRecoveryTest, RepairsTailAndAllowsNewAppend) {
+    const WalPutRecord first = recovery_first_record();
 
-    const WalPutRecord second =
-        recovery_second_record();
+    const WalPutRecord second = recovery_second_record();
 
-    const std::vector<std::uint8_t> first_bytes =
-        encode_wal_record(first);
+    const std::vector<std::uint8_t> first_bytes = encode_wal_record(first);
 
-    const std::vector<std::uint8_t> second_bytes =
-        encode_wal_record(second);
+    const std::vector<std::uint8_t> second_bytes = encode_wal_record(second);
 
-    const std::size_t partial_size =
-        second_bytes.size() / 2U;
+    const std::size_t partial_size = second_bytes.size() / 2U;
 
-    std::vector<std::uint8_t> damaged_file =
-        first_bytes;
+    std::vector<std::uint8_t> damaged_file = first_bytes;
 
-    for (
-        std::size_t index = 0;
-        index < partial_size;
-        ++index
-    ) {
+    for (std::size_t index = 0; index < partial_size; ++index) {
         damaged_file.push_back(second_bytes[index]);
     }
 
@@ -286,11 +276,7 @@ TEST_F(WalRecoveryTest, MissingFileReportsSystemError) {
     std::vector<WalPutRecord> initial_replay;
 
     const WalReplayResult repair_point = replay_wal(
-        path_,
-        [&initial_replay](const WalPutRecord& record) {
-            initial_replay.push_back(record);
-        }
-    );
+        path_, [&initial_replay](const WalPutRecord& record) { initial_replay.push_back(record); });
 
     ASSERT_TRUE(repair_point.had_incomplete_tail());
     ASSERT_EQ(initial_replay.size(), 1U);
@@ -298,34 +284,21 @@ TEST_F(WalRecoveryTest, MissingFileReportsSystemError) {
 
     repair_wal_tail(path_, repair_point);
 
-    EXPECT_EQ(
-        std::filesystem::file_size(path_),
-        first_bytes.size()
-    );
+    EXPECT_EQ(std::filesystem::file_size(path_), first_bytes.size());
 
     std::vector<WalPutRecord> after_repair;
 
     const WalReplayResult clean_result = replay_wal(
-        path_,
-        [&after_repair](const WalPutRecord& record) {
-            after_repair.push_back(record);
-        }
-    );
+        path_, [&after_repair](const WalPutRecord& record) { after_repair.push_back(record); });
 
     ASSERT_EQ(after_repair.size(), 1U);
     EXPECT_EQ(after_repair.front(), first);
     EXPECT_FALSE(clean_result.had_incomplete_tail());
 
     {
-        WalWriter writer(
-            path_,
-            WalDurability::buffered
-        );
+        WalWriter writer(path_, WalDurability::buffered);
 
-        EXPECT_EQ(
-            writer.size_bytes(),
-            first_bytes.size()
-        );
+        EXPECT_EQ(writer.size_bytes(), first_bytes.size());
 
         writer.append(second);
         writer.sync();
@@ -334,16 +307,9 @@ TEST_F(WalRecoveryTest, MissingFileReportsSystemError) {
     std::vector<WalPutRecord> final_replay;
 
     const WalReplayResult final_result = replay_wal(
-        path_,
-        [&final_replay](const WalPutRecord& record) {
-            final_replay.push_back(record);
-        }
-    );
+        path_, [&final_replay](const WalPutRecord& record) { final_replay.push_back(record); });
 
-    const std::vector<WalPutRecord> expected{
-        first,
-        second
-    };
+    const std::vector<WalPutRecord> expected{first, second};
 
     EXPECT_EQ(final_replay, expected);
     EXPECT_EQ(final_result.records_replayed, 2U);
@@ -351,88 +317,52 @@ TEST_F(WalRecoveryTest, MissingFileReportsSystemError) {
 }
 
 TEST_F(WalRecoveryTest, RepairIsNoOpForCleanWal) {
-    const WalPutRecord record =
-        recovery_first_record();
+    const WalPutRecord record = recovery_first_record();
 
     {
-        WalWriter writer(
-            path_,
-            WalDurability::buffered
-        );
+        WalWriter writer(path_, WalDurability::buffered);
 
         writer.append(record);
         writer.sync();
     }
 
-    const std::uintmax_t original_size =
-        std::filesystem::file_size(path_);
+    const std::uintmax_t original_size = std::filesystem::file_size(path_);
 
-    const WalReplayResult replay_result = replay_wal(
-        path_,
-        [](const WalPutRecord&) {
-        }
-    );
+    const WalReplayResult replay_result = replay_wal(path_, [](const WalPutRecord&) {});
 
-    ASSERT_FALSE(
-        replay_result.had_incomplete_tail()
-    );
+    ASSERT_FALSE(replay_result.had_incomplete_tail());
 
     repair_wal_tail(path_, replay_result);
 
-    EXPECT_EQ(
-        std::filesystem::file_size(path_),
-        original_size
-    );
+    EXPECT_EQ(std::filesystem::file_size(path_), original_size);
 }
 
 TEST_F(WalRecoveryTest, RefusesStaleRepairResult) {
-    const std::vector<std::uint8_t> first_bytes =
-        encode_wal_record(recovery_first_record());
+    const std::vector<std::uint8_t> first_bytes = encode_wal_record(recovery_first_record());
 
-    const std::vector<std::uint8_t> second_bytes =
-        encode_wal_record(recovery_second_record());
+    const std::vector<std::uint8_t> second_bytes = encode_wal_record(recovery_second_record());
 
-    const std::size_t partial_size =
-        second_bytes.size() / 2U;
+    const std::size_t partial_size = second_bytes.size() / 2U;
 
-    std::vector<std::uint8_t> damaged_file =
-        first_bytes;
+    std::vector<std::uint8_t> damaged_file = first_bytes;
 
-    for (
-        std::size_t index = 0;
-        index < partial_size;
-        ++index
-    ) {
+    for (std::size_t index = 0; index < partial_size; ++index) {
         damaged_file.push_back(second_bytes[index]);
     }
 
     write_file_bytes(path_, damaged_file);
 
-    const WalReplayResult stale_result = replay_wal(
-        path_,
-        [](const WalPutRecord&) {
-        }
-    );
+    const WalReplayResult stale_result = replay_wal(path_, [](const WalPutRecord&) {});
 
     ASSERT_TRUE(stale_result.had_incomplete_tail());
 
-    const std::uintmax_t changed_size =
-        std::filesystem::file_size(path_) + 1U;
+    const std::uintmax_t changed_size = std::filesystem::file_size(path_) + 1U;
 
-    std::filesystem::resize_file(
-        path_,
-        changed_size
-    );
+    std::filesystem::resize_file(path_, changed_size);
 
-    EXPECT_THROW(
-        repair_wal_tail(path_, stale_result),
-        std::runtime_error
-    );
+    EXPECT_THROW(repair_wal_tail(path_, stale_result), std::runtime_error);
 
-    EXPECT_EQ(
-        std::filesystem::file_size(path_),
-        changed_size
-    );
+    EXPECT_EQ(std::filesystem::file_size(path_), changed_size);
 }
 
 } // namespace

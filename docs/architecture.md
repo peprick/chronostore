@@ -1,228 +1,281 @@
 # ChronoStore Architecture
 
-This document captures the intended architecture before implementation. It is
-a design baseline, not a claim that the listed components already exist.
+This document describes the implemented v0.1 architecture. It distinguishes
+current guarantees from future work so that behavior can be reviewed against
+the code and tests.
 
 ## Scope
 
-ChronoStore is a single-node, embeddable time-series storage engine. Its core
-workload is a high rate of timestamped numeric writes followed by point,
-latest-value, and bounded time-range queries.
+ChronoStore is a single-node embedded engine for timestamped numeric samples.
+It owns a database directory, runs inside the calling process, and supports:
 
-The first complete version will prioritize:
+- ordered writes with last-write-wins replacement;
+- exact timestamp, latest, and half-open range queries;
+- a durable write-ahead log;
+- immutable indexed segments;
+- atomic metadata publication;
+- restart recovery and incomplete-tail repair;
+- explicit flush and compaction operations;
+- concurrent callers within one process.
 
-- correct recovery after abrupt process termination;
-- deterministic on-disk formats;
-- bounded memory usage during reads;
-- concurrent readers with an explicitly serialized write order;
-- transparent observability and reproducible performance measurements.
+SQL, joins, replication, authentication, delete semantics, and multi-tenant
+resource isolation are outside v0.1.
 
-SQL, joins, distributed replication, authentication, and multi-tenant resource
-isolation are outside the initial scope.
+## Component Map
+
+```mermaid
+flowchart TD
+    CLIENTS["Application, CLI, ChronoView"] --> DB["Database public API"]
+    DB --> PL["Exclusive directory lock"]
+    DB --> SE["StorageEngine"]
+
+    SE --> MUTEX["shared_mutex"]
+    SE --> WAL["WalWriter"]
+    SE --> MEM["MemTable"]
+    SE --> MF["Manifest"]
+    SE --> READERS["SegmentReader set"]
+
+    MEM --> BLOCKS["SegmentBlock snapshots"]
+    BLOCKS --> WRITER["Segment writer"]
+    WRITER --> FILES["Immutable .cst files"]
+    FILES --> READERS
+    READERS --> INDEX["In-memory sparse indexes"]
+    INDEX --> BLOCKREAD["On-demand block reads"]
+
+    WAL --> RECOVERY["WAL replay and tail repair"]
+    MF --> RECOVERY
+    READERS --> RECOVERY
+    RECOVERY --> MEM
+```
+
+The public `Database` class uses PImpl, so file-format and platform-I/O types do
+not leak into consumer headers. ChronoView and the CLI use only this public API.
 
 ## Data Model
 
-A logical series consists of:
+`SeriesKey` contains a non-empty measurement and zero or more `Tag` values.
+Construction sorts tags and rejects duplicate keys. This gives one canonical
+ordering for comparisons, maps, WAL records, and segment indexes.
 
-- a non-empty measurement name;
-- a canonical, uniquely keyed collection of string tags.
+`Timestamp` is a signed 64-bit count of nanoseconds since the Unix epoch.
+`Sample` pairs a timestamp with a finite IEEE 754 `double`; NaN and infinity
+are rejected.
 
-A sample consists of:
+For one series, timestamps are unique. A later write to an existing timestamp
+replaces its value. The logical sample count therefore counts unique
+`(series, timestamp)` pairs, not physical copies across segments.
 
-- a signed 64-bit Unix timestamp in nanoseconds;
-- a finite IEEE 754 double-precision value.
+## Public API Boundary
 
-Tags are stored in deterministic key order so that input order does not change
-series identity. Persistent numeric series IDs will be assigned by a catalog.
-Implementation-defined values such as `std::hash` results will never be used as
-durable identifiers.
+The public API provides:
 
-## Core Components
+- `put`, `get`, `latest`, and `range`;
+- sorted series discovery;
+- `sync`, `flush`, and `compact`;
+- exact logical, in-memory, segment, and WAL statistics;
+- buffered and sync-on-write durability modes.
 
-### Public API
+Malformed persistent state is translated to `DatabaseCorruptionError`.
+Concurrent process ownership is reported as `DatabaseBusyError`. Model errors
+use standard argument exceptions and I/O failures retain `std::system_error`.
 
-The library owns database lifecycle, validates writes, exposes range queries,
-and reports operational errors without exposing file-format details. Public
-types should have clear ownership and lifetime rules and should avoid leaking
-third-party dependencies into client code.
+`Database` is move-only. Calling an operation on a moved-from instance throws
+`std::logic_error` rather than dereferencing an empty implementation pointer.
 
-### Series Catalog
+## Write Path
 
-The catalog maps canonical series keys to stable numeric IDs. Numeric IDs keep
-repeated strings out of sample blocks and make indexes smaller. Catalog changes
-must follow the same recovery guarantees as sample writes.
+A `put` takes the engine's exclusive lock and executes this order:
 
-### Write-Ahead Log
+1. Determine whether the `(series, timestamp)` already exists in memory or a
+   segment.
+2. Encode and append a checksummed WAL record.
+3. Synchronize the WAL when durability is `sync_on_write`.
+4. Insert or replace the sample in the ordered MemTable.
+5. Increment the logical count only for a new timestamp.
 
-The write-ahead log records accepted mutations before they are acknowledged.
-Records are length-delimited, versioned, and checksummed. Recovery replays the
-valid prefix and treats a trailing incomplete record as an interrupted write.
+The WAL-before-memory order guarantees that every successfully acknowledged
+sync-on-write mutation can be reconstructed after restart. If an I/O or
+mutation step fails, the engine enters a failed state and requires reopening;
+it does not continue after an uncertain partial operation.
 
-The exact durability contract, including when an `fsync`-equivalent operation
-occurs, will be configurable and documented before the WAL is implemented.
+The public layer checks the configured MemTable threshold after a write. If it
+is reached, `flush` runs synchronously on that caller.
 
-### In-Memory Table
+## MemTable
 
-The current MemTable is a volatile, single-threaded reference implementation.
-It uses one ordered map for series and one ordered timestamp map per series.
-Its behavior is explicit:
+The MemTable is a reference-friendly ordered structure:
 
-- a repeated `(series, timestamp)` write replaces the previous value;
-- replacement does not increase the logical sample count;
-- `latest` returns the value with the greatest timestamp;
-- ranges are ordered and use half-open `[start, end)` boundaries;
-- an equal-bound range is empty, while a reversed range is invalid;
-- missing series return no latest value and an empty range.
+```text
+map<SeriesKey, map<Timestamp, double>>
+```
 
-Insertion is `O(log S + log N)`, where `S` is the series count and `N` is the
-sample count for the selected series. A range query returning `K` samples is
-`O(log S + log N + K)`.
+It favors explicit semantics over specialized allocation. Point insertion and
+lookup are logarithmic; a range lookup seeks with `lower_bound` and walks only
+the selected interval. Snapshots are emitted in canonical series and timestamp
+order for segment construction.
 
-The MemTable does not yet enforce a memory threshold, synchronize concurrent
-access, or survive process termination. A later milestone will freeze a full
-table, publish a new active table, and flush the immutable table in the
-background. Specialized allocators or alternative structures require profiling
-evidence before being introduced.
+## Flush And Segment Publication
 
-### Segment Files
+`flush` holds the exclusive engine lock and performs:
 
-Flushed samples are written to immutable, versioned segment files. A segment is
-published only after its contents and metadata are complete. Expected regions
-include:
+1. Snapshot the MemTable in sorted order.
+2. Split each series into blocks of at most 256 samples.
+3. Encode a new immutable segment into a temporary file.
+4. Synchronize the file, atomically rename it, and synchronize the parent
+   directory where supported.
+5. Open the segment through `SegmentReader` to validate its envelope and index.
+6. Write and atomically replace a manifest containing the new live segment set
+   and logical count.
+7. Install the new reader in memory.
+8. Durably truncate the WAL.
+9. Clear the MemTable.
 
-1. format header;
-2. series and block metadata;
-3. timestamp/value blocks;
-4. sparse indexes;
-5. checksummed footer and offsets.
+The segment becomes database state only at manifest publication. An orphan
+segment left by a crash before that point is removed during startup.
 
-Unknown format versions must be rejected safely. Readers must validate lengths
-and offsets before allocating memory or seeking within a file.
+## Segment Layout And Sparse Index
 
-### Query Engine
+Each segment contains a fixed header, one or more checksummed blocks, a
+checksummed sparse index, and a fixed footer. Header and footer independently
+record block count and index bounds; they must agree.
 
-A query identifies a series and a half-open time interval. The engine finds
-overlapping sources, seeks through sparse indexes, and merges ordered iterators
-from memory and segments. Results are streamed so query memory depends on the
-number of sources and block size rather than the total result size.
+The index has one entry per block:
 
-Duplicate-timestamp and overwrite semantics will be specified before writes are
-persisted because those rules affect recovery, merging, and compaction.
+- canonical series key;
+- first and last timestamp;
+- file offset and encoded byte length;
+- sample count.
 
-### Manifest
+Opening a segment reads the header, footer, and index, not every data block.
+Point, latest, and range operations search the ordered index and fetch only
+candidate blocks. A fetched block must match all metadata in its index entry.
 
-The manifest identifies the set of segment files that constitute a valid
-database state. Updates use write-new, synchronize, and atomic-replacement
-semantics. Startup must choose one complete state and never infer validity from
-partially written segment files.
+Detailed byte layouts are in [File Formats](file-formats.md).
 
-### Compaction
+## Read Path
 
-Compaction merges selected immutable segments, applies overwrite or deletion
-rules, writes replacement segments, and atomically publishes a new manifest.
-Old files remain available until active readers can no longer reference them.
+Queries take a shared engine lock, preventing a flush or write from changing
+the visible source set while the query runs.
 
-### Block Cache
+- `get` checks the MemTable first, then segments from newest to oldest.
+- `latest` asks each segment and the MemTable for a candidate and keeps the
+  greatest timestamp, with newer memory state winning ties.
+- `range` reads overlapping blocks from segments in manifest order, then
+  overlays MemTable values in an ordered timestamp map.
+- `series` unions MemTable keys with series keys from all segment indexes.
 
-A bounded cache may retain decoded or compressed blocks used by recent queries.
-It will expose hit rate, memory use, and eviction statistics. Eviction policy
-and synchronization will be selected from benchmark evidence.
+The latest physical value wins when duplicate timestamps exist across
+segments. Returned ranges are ordered and half-open `[start, end)`.
+
+Segment I/O is bounded to matching blocks, but the public range result and its
+merge map are materialized in memory. A streaming cursor is future work.
+
+## Manifest
+
+The manifest is the commit point for the persistent segment set. It stores:
+
+- format version and flags;
+- monotonically increasing generation;
+- logical sample count represented by the live segments;
+- ordered live segment filenames;
+- payload length and its bitwise inverse;
+- CRC32C over all preceding bytes.
+
+Updates use write-temporary, synchronize, atomic rename, and directory
+synchronization. Startup never guesses live state by scanning segment names.
+Only the checksummed manifest decides which segments are part of the database.
+
+## Recovery
+
+Database startup holds the process lock throughout recovery:
+
+1. Load and validate the manifest, or use an empty state when it does not yet
+   exist.
+2. Open every referenced segment and validate its envelope and index.
+3. Remove unreferenced segment files and stale segment temporary files.
+4. Verify that the manifest logical count is possible for its physical
+   segments.
+5. Stream WAL records in order and replay each complete checksummed record.
+6. Treat an incomplete final record as an interrupted append and truncate it.
+7. Reject corruption in any complete record with an exact byte offset.
+8. Open the WAL writer only after the recovered size is known and stable.
+
+There is a deliberate crash window after manifest publication and before WAL
+reset. Recovery checks both the recovered MemTable and live segments before
+incrementing the logical count, so replaying those duplicate WAL records is
+idempotent.
+
+## Compaction
+
+The v0.1 compactor runs synchronously and merges all current segments:
+
+1. Decode blocks in oldest-to-newest segment order.
+2. Overlay values in ordered per-series timestamp maps.
+3. Verify the compacted unique count against the manifest.
+4. Write and validate one replacement segment.
+5. Atomically publish a manifest referencing only the replacement.
+6. Swap the in-memory reader set.
+7. Remove obsolete files on a best-effort basis.
+
+If the process stops before manifest publication, startup removes the orphan
+replacement. If it stops after publication, the new manifest is authoritative
+and old unreferenced segments are removed at startup.
+
+Compaction currently loads all selected samples in memory. Selection policies,
+levels, background workers, and reader-epoch reclamation are future work.
 
 ## Concurrency Model
 
-The initial model is:
+- An OS file lock permits exactly one owning process per database directory.
+- A `std::shared_mutex` protects all engine state.
+- Point, latest, range, series, count, and stats operations use shared locks.
+- Put, sync, flush, and compact operations use exclusive locks.
+- Immutable segment files require no mutation synchronization after
+  publication.
+- Public methods are safe for concurrent calls on the same `Database` object.
 
-- multiple calling threads may submit writes;
-- one write coordinator establishes WAL and mutation order;
-- multiple readers may execute concurrently;
-- immutable tables and segments require no mutation locks;
-- background flush and compaction publish new state atomically.
+This model is intentionally simple and testable. It provides concurrent reads
+and a total mutation order, but long range queries delay writers because the
+shared lock is held through result construction.
 
-The API will state whether a query observes a snapshot taken at query start and
-how newly acknowledged writes become visible. Those semantics must be tested,
-not inferred from lock placement.
+## Durability Modes
 
-## Recovery Model
+`sync_on_write` uses `_commit` on Windows, `F_FULLFSYNC` with an `fsync`
+fallback on macOS, and `fsync` on other POSIX systems. It is the default.
 
-Startup recovery will:
+`buffered` writes complete records to the operating system without syncing
+each append. Callers must use `sync` or `flush` before making a durable-write
+claim. Segment and manifest publication always synchronize regardless of the
+WAL mode.
 
-1. load and validate the latest complete manifest;
-2. open the segment files referenced by that manifest;
-3. find the WAL position represented by those segments;
-4. replay each complete, checksummed WAL record after that position;
-5. restore the active memory table and resume normal operation.
+## Format Defense
 
-Recovery tests will terminate writer processes at controlled points, reopen the
-database, and compare observed state with the documented acknowledgement
-contract.
+Persistent decoders validate bounds before allocation or slicing. Formats use
+explicit fixed-width little-endian fields and never persist `sizeof`-dependent
+object layouts, pointers, padding, or `std::hash` values. Length fields are
+paired with their bitwise inverse where an early framing check matters.
 
-## Compression Plan
+CRC32C detects accidental corruption. It is not authentication and does not
+protect against a malicious writer with filesystem access.
 
-Compression is postponed until uncompressed blocks are correct and benchmarked.
-Candidate techniques include:
+## Tooling Layers
 
-- timestamp delta and delta-of-delta encoding;
-- variable-length integer encoding;
-- XOR encoding for double-precision values;
-- optional LZ4 or Zstandard block compression.
+The CLI, benchmark, example, and ChronoView all link the public CMake target
+`ChronoStore::chronostore`. The native GUI is optional because it adds GLFW,
+Dear ImGui, ImPlot, and OpenGL dependencies; the core library has no GUI or
+network dependency.
 
-Every codec must support bounds-checked decoding, corruption detection, and
-versioned selection. Compression ratio will be reported alongside encode and
-decode cost.
+## Current Tradeoffs
 
-## Integration Layers
+- Blocks are uncompressed to keep the first format inspectable and measurable.
+- There is no decoded-block cache.
+- Flush and compaction are synchronous.
+- Compaction is whole-database rather than leveled.
+- The public range API materializes results.
+- There are no deletes, tombstones, retention policies, or transactions across
+  multiple samples.
+- One process owns the directory; inter-process read sharing is not supported.
+- Pre-1.0 file formats have no migration tool.
 
-The core engine will be delivered as a C++ library. A CLI will exercise the
-same public API used by external programs. Python bindings and an optional HTTP
-service may be layered above it without placing networking or Python concerns
-inside the storage engine.
-
-ChronoView is planned as a Dear ImGui and ImPlot application for querying data,
-viewing engine metrics, and inspecting the WAL, memory tables, segment layout,
-indexes, and compaction activity. It is a diagnostic client, not part of the
-durability boundary.
-
-## Verification Strategy
-
-Verification will include:
-
-- unit tests for value types, codecs, and indexes;
-- model-based tests against a simple in-memory reference implementation;
-- randomized operation sequences;
-- crash and partial-write recovery tests;
-- corruption and malformed-file tests;
-- sanitizer builds;
-- concurrent read/write stress tests;
-- reproducible throughput, latency, memory, and storage benchmarks.
-
-## Implementation Sequence
-
-The dependency order is intentional:
-
-1. build system and value types;
-2. reference model and in-memory queries;
-3. binary record encoding;
-4. write-ahead log and recovery;
-5. segment writer and reader;
-6. sparse indexes and merged queries;
-7. background flushing and snapshots;
-8. manifest and compaction;
-9. compression and cache;
-10. external interfaces and visual inspection tools.
-
-Later components depend on semantics established by earlier components. For
-example, overwrite behavior must be settled before WAL replay and compaction can
-be implemented consistently.
-
-## Open Design Decisions
-
-These choices will be resolved with short design records before implementation:
-
-- duplicate timestamp and overwrite semantics;
-- exact durability modes and synchronization frequency;
-- database directory locking and multi-process behavior;
-- snapshot visibility guarantees;
-- block sizing and segment-selection policy;
-- deletion and retention semantics;
-- persistent catalog transaction boundaries;
-- public error model and ABI expectations.
+These are explicit v0.1 boundaries, not hidden claims. They identify the next
+systems work without weakening the implemented durability path.

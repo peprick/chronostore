@@ -13,7 +13,10 @@
 
 namespace chronostore {
 
-enum class Durability { buffered, sync_on_write };
+enum class Durability {
+    buffered,
+    sync_on_write,
+};
 
 class DatabaseBusyError : public std::runtime_error {
 public:
@@ -27,6 +30,7 @@ public:
 
 struct DatabaseOptions {
     Durability durability{Durability::sync_on_write};
+    // A value of zero disables automatic synchronous flushes.
     std::size_t memtable_flush_threshold{4096U};
 };
 
@@ -39,6 +43,7 @@ struct DatabaseStats {
 
 class Database {
 public:
+    // Creates the directory when needed and acquires its exclusive process lock.
     explicit Database(std::filesystem::path directory, DatabaseOptions options = {});
 
     ~Database();
@@ -51,8 +56,11 @@ public:
 
     void put(SeriesKey series, Sample sample);
 
+    // Synchronizes the active WAL without flushing the MemTable.
     void sync();
+    // Publishes the MemTable as a new immutable segment.
     void flush();
+    // Merges all current immutable segments synchronously.
     void compact();
 
     [[nodiscard]]
@@ -61,9 +69,11 @@ public:
     [[nodiscard]]
     std::optional<Sample> get(const SeriesKey& series, Timestamp timestamp) const;
 
+    // Returns timestamp-ordered samples in the half-open interval [start, end).
     [[nodiscard]]
     std::vector<Sample> range(const SeriesKey& series, Timestamp start, Timestamp end) const;
 
+    // Returns each known series once in canonical order.
     [[nodiscard]]
     std::vector<SeriesKey> series() const;
 

@@ -1,185 +1,297 @@
 # ChronoStore
 
-ChronoStore is a C++20 embedded time-series storage engine designed for
-high-volume telemetry, observability, sensor data, simulation output, and
-market-data-style workloads. The project focuses on storage-engine internals:
-durability, binary file formats, indexing, compression, concurrency, crash
-recovery, and measurable performance.
+ChronoStore is a C++20 embedded time-series storage engine. It is designed to
+show storage-systems and production C++ depth through durable writes, explicit
+binary formats, sparse on-disk indexes, crash recovery, synchronization,
+compaction, packaging, benchmarks, a CLI, and a native inspection GUI.
 
-> **Project status:** Milestone 3 is complete and Milestone 4 is beginning.
-> ChronoStore now provides a public C++ API backed by an ordered in-memory
-> table and a durable, checksummed write-ahead log with deterministic crash
-> recovery. Immutable segment files are the next storage layer.
+**Status:** the v0.1 storage core is functional. The library, CLI, ChronoView,
+examples, benchmark driver, CMake package, and 112 automated tests are
+implemented. The current file format is versioned but remains pre-1.0 and may
+change between releases.
 
-## Implemented
+![ChronoView plotting a persisted temperature series](docs/images/chronoview.png)
 
-- C++20 static-library target with strict Clang, GCC, and MSVC warnings.
-- Validated `Tag`, canonical `SeriesKey`, strong `Timestamp`, and finite `Sample`
-  value types.
-- Deterministic tag ordering and duplicate tag-key rejection.
-- Internal ordered MemTable with last-write-wins updates, latest-value lookup,
-  and half-open `[start, end)` range queries.
-- Explicit little-endian byte encoding with bounds-checked reads.
-- Portable CRC32C corruption detection with standard known-answer coverage.
-- Versioned, length-delimited, checksummed WAL `PUT` encoding and decoding.
-- Cross-platform append-only WAL file I/O with buffered and sync-on-write
-  durability modes.
-- Streaming WAL recovery, incomplete-tail repair, and complete-record
-  corruption rejection.
-- Integrated storage engine with write-ahead mutation ordering and restart
-  recovery.
-- Public PImpl-based `Database` API that creates and reopens database
-  directories without exposing internal storage types.
-- GoogleTest integration with 70 discovered unit and integration tests.
-- Project-wide `clang-format` configuration.
+## What It Demonstrates
 
-## Project Goals
+- Modern C++20 value types, RAII, PImpl, move-only ownership, and standard
+  library concurrency.
+- A write-ahead log with configurable durability and deterministic recovery.
+- Bounds-checked little-endian codecs and CRC32C integrity checks.
+- Immutable segment files split into blocks of at most 256 samples.
+- A checksummed sparse index that lets readers fetch only relevant blocks.
+- Atomic manifest replacement and crash-safe WAL rotation.
+- Last-write-wins merge semantics across memory, WAL recovery, and segments.
+- Synchronous compaction that rewrites live state before atomically publishing
+  it.
+- Multi-threaded readers and writers with one exclusive process owner.
+- A dependency-light public C++ API, command-line client, native GUI, package
+  installation, sanitizer build, and external-consumer test.
 
-- Provide a small embeddable C++ library for timestamped numeric data.
-- Preserve acknowledged writes across process crashes using a write-ahead log.
-- Serve efficient point and time-range queries through sparse indexes.
-- Keep query memory bounded by streaming results from immutable segments.
-- Compact segment files safely in the background.
-- Expose correctness and performance through tests, benchmarks, and metrics.
-- Support a CLI, optional Python bindings, and a native inspection GUI.
+ChronoStore is useful for telemetry, observability metrics, IoT readings,
+robotics and simulation output, energy data, scientific measurements, and
+market-data-style time series. It is not tied to stocks or finance.
 
-ChronoStore is intentionally single-node and specialized. It is not intended
-to implement SQL, relational joins, distributed consensus, or cloud service
-management.
+## Architecture
+
+```mermaid
+flowchart LR
+    APP["C++ application"] --> API["Database API"]
+    CLI["chronostore CLI"] --> API
+    GUI["ChronoView"] --> API
+
+    API --> LOCK["Process lock"]
+    API --> ENGINE["Storage engine"]
+    ENGINE --> WAL["Write-ahead log"]
+    ENGINE --> MEM["Ordered MemTable"]
+    MEM --> FLUSH["Flush"]
+    FLUSH --> SEG["Immutable segments"]
+    SEG --> IDX["Sparse block indexes"]
+    ENGINE --> MAN["Atomic manifest"]
+    ENGINE --> COMPACT["Compaction"]
+    COMPACT --> SEG
+    IDX --> QUERY["Merged queries"]
+    MEM --> QUERY
+```
+
+The successful write order is WAL append, optional durable synchronization,
+then MemTable mutation. A flush writes and synchronizes a new segment, opens it
+for validation, publishes a new manifest atomically, and only then resets the
+WAL. Recovery tolerates an incomplete final WAL record, rejects complete
+corruption, and de-duplicates the crash window where a manifest was published
+before the WAL was reset.
+
+See [Architecture](docs/architecture.md) and
+[File Formats](docs/file-formats.md) for the detailed invariants.
 
 ## Data Model
 
-A series is identified by a measurement name and a canonical set of tags. Each
-series contains timestamped numeric samples.
+A series is a measurement plus a canonical set of string tags. A sample is a
+signed 64-bit Unix timestamp in nanoseconds and a finite IEEE 754 `double`.
 
 ```text
-measurement: cpu_usage
-tags:        host=server-01, region=mumbai
-timestamp:   1783308123456789000 nanoseconds since Unix epoch
-value:       72.4
+measurement: temperature
+tags:        room=lab, sensor=primary
+timestamp:   1700000000000000000
+value:       21.5
 ```
 
-The same model can represent application metrics, IoT readings, robotics
-telemetry, scientific measurements, energy usage, network statistics, or
-financial time series.
+Tags are sorted by key, duplicate tag keys are rejected, and input tag order
+does not change series identity. Rewriting the same `(series, timestamp)` uses
+last-write-wins semantics without increasing the logical sample count. Ranges
+are ordered and half-open: `[start, end)`.
 
-## Planned Architecture
+## Prerequisites
 
-```mermaid
-flowchart TD
-    APP["C++ application"] --> API["ChronoStore library API"]
-    CLI["Command-line tool"] --> API
-    PY["Optional Python bindings"] --> API
-    GUI["ChronoView inspector"] --> API
+- CMake 3.24 or newer.
+- A C++20 compiler: recent Clang, AppleClang, GCC, or MSVC.
+- Ninja is recommended; another CMake generator also works.
+- Git and network access on the first test or GUI configuration so CMake can
+  fetch pinned dependencies.
+- OpenGL and platform window-development libraries when building ChronoView.
 
-    API --> WRITE["Write path"]
-    API --> QUERY["Query engine"]
-    WRITE --> WAL["Write-ahead log"]
-    WRITE --> MEM["In-memory table"]
-    MEM --> FLUSH["Flush manager"]
-    FLUSH --> SEG["Immutable segment files"]
-    QUERY --> MEM
-    QUERY --> INDEX["Sparse indexes"]
-    INDEX --> SEG
-    COMPACT["Background compaction"] --> SEG
-    RECOVERY["Crash recovery"] --> WAL
-    RECOVERY --> MEM
+GoogleTest is fetched only when `BUILD_TESTING=ON`. Dear ImGui 1.92.8, ImPlot
+1.0, and GLFW 3.4 are fetched only when `CHRONOSTORE_BUILD_GUI=ON`.
+
+## Build And Test
+
+```bash
+cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug
+cmake --build build --parallel
+ctest --test-dir build --output-on-failure
 ```
 
-See [docs/architecture.md](docs/architecture.md) for the design boundaries,
-planned guarantees, component responsibilities, and implementation sequence.
+For a library-only build with no downloaded test dependencies:
 
-## Planned Interfaces
+```bash
+cmake -S . -B build-lib -G Ninja \
+  -DBUILD_TESTING=OFF \
+  -DCHRONOSTORE_BUILD_TOOLS=OFF \
+  -DCHRONOSTORE_BUILD_EXAMPLES=OFF \
+  -DCHRONOSTORE_BUILD_BENCHMARKS=OFF
+cmake --build build-lib --parallel
+```
 
-- **C++ library:** direct, low-overhead embedding in another application.
-- **CLI:** import, query, inspect, verify, benchmark, and compact databases.
-- **Python bindings:** analytics and notebook workflows through `pybind11`.
-- **ChronoView:** native engineering GUI for charts and storage inspection.
-- **HTTP service:** optional language-neutral integration layer.
+Enable AddressSanitizer and UndefinedBehaviorSanitizer on Clang or GCC with
+`-DCHRONOSTORE_ENABLE_SANITIZERS=ON`.
 
-The C++ library and CLI are core deliverables. Other interfaces will be added
-only after storage correctness and recovery are well tested.
+## ChronoView GUI
+
+ChronoView is a native C++ client built on the same public API as every other
+consumer. It discovers series, writes samples, runs point/latest/range
+queries, plots results, displays exact timestamps in a table, reports engine
+statistics, and exposes sync, flush, and compaction commands.
+
+```bash
+cmake -S . -B build-gui -G Ninja \
+  -DCHRONOSTORE_BUILD_GUI=ON \
+  -DBUILD_TESTING=OFF
+cmake --build build-gui --parallel
+./build-gui/chronoview ./demo-db --demo
+```
+
+`--demo` writes and plots a deterministic 240-sample temperature series. Run
+without it to inspect an existing database directory. See
+[ChronoView](docs/chronoview.md) for controls and build notes.
+
+## CLI
+
+The `chronostore` executable uses tab-separated output suitable for shell
+pipelines. A missing point or latest value returns exit status `2`.
+
+```bash
+./build/chronostore put ./example-db temperature 100 21.5 room=lab
+./build/chronostore put ./example-db temperature 200 22.75 room=lab
+./build/chronostore get ./example-db temperature 100 room=lab
+./build/chronostore latest ./example-db temperature room=lab
+./build/chronostore range ./example-db temperature 0 1000 room=lab
+./build/chronostore series ./example-db
+./build/chronostore stats ./example-db
+./build/chronostore flush ./example-db
+./build/chronostore compact ./example-db
+```
+
+Only one process may own a database directory at a time, so close ChronoView
+before opening the same directory through the CLI.
+
+## C++ API
+
+```cpp
+#include <chronostore/database.hpp>
+
+chronostore::Database database{"telemetry-db"};
+chronostore::SeriesKey series{
+    "temperature", {chronostore::Tag{"room", "lab"}}};
+
+database.put(
+    series,
+    chronostore::Sample{chronostore::Timestamp{1700000000000000000LL}, 21.5});
+
+const auto sample = database.latest(series);
+const auto window = database.range(
+    series,
+    chronostore::Timestamp{1699999999000000000LL},
+    chronostore::Timestamp{1700000001000000000LL});
+
+database.flush();
+database.compact();
+```
+
+`DatabaseCorruptionError` reports malformed WAL, manifest, or segment state;
+`DatabaseBusyError` reports an existing process owner. Invalid model values
+use standard argument exceptions, while operating-system failures use
+`std::system_error`.
+
+## Durability And Concurrency
+
+- `Durability::sync_on_write` is the default. Each successful `put` performs
+  an `fsync`-equivalent operation before the sample becomes visible in memory.
+- `Durability::buffered` improves throughput but requires `sync()` or `flush()`
+  before the application can claim durable persistence.
+- `memtable_flush_threshold` defaults to 4096 logical in-memory samples. Set it
+  to `0` to disable automatic flushes.
+- Public operations are thread-safe. Readers may run concurrently; writes,
+  flushes, and compaction are serialized.
+- A query holds a shared engine lock for its duration and therefore observes a
+  consistent state while it runs.
+- Flush and compaction are synchronous in v0.1 and execute on the caller's
+  thread.
+
+## Storage Directory
+
+```text
+LOCK                         Exclusive process-owner lock
+chronostore.wal              Active write-ahead log
+MANIFEST                     Checksummed live-segment set and generation
+segment-00000000000000000001.cst
+segment-00000000000000000002.cst
+```
+
+Segment headers, blocks, indexes, footers, and the manifest are versioned and
+checksummed. Readers load segment indexes at open and read data blocks on
+demand. The vector-returning range API still materializes the final result in
+memory.
+
+## Install And Consume
+
+```bash
+cmake --install build --prefix ./install
+```
+
+An external CMake project can then consume the exported target:
+
+```cmake
+find_package(ChronoStore 0.1 REQUIRED)
+target_link_libraries(my_app PRIVATE ChronoStore::chronostore)
+```
+
+Configure the consumer with `-DCMAKE_PREFIX_PATH=/path/to/install`.
+
+## Benchmark Driver
+
+```bash
+./build/chronostore_bench 100000
+```
+
+The driver reports sequential write throughput and repeated bounded-range
+query throughput. It uses buffered durability and prints its workload size;
+results are machine-specific smoke baselines, not universal performance
+claims.
+
+## Verification
+
+The test suite covers model validation, byte codecs, standard CRC32C vectors,
+stable WAL and segment layouts, every truncated record/block prefix,
+corruption detection, WAL repair, manifest replacement, sparse indexed reads,
+overwrite semantics, crash-window recovery, flush, compaction, process
+locking, concurrent writers, public error translation, and CLI behavior.
+
+The release workflow also includes:
+
+- a full Debug build with strict warnings;
+- all tests under AddressSanitizer and UndefinedBehaviorSanitizer;
+- a Release build;
+- installation into a clean prefix;
+- configuration, compilation, and execution of an external `find_package`
+  consumer;
+- native GUI compilation, launch, and visual inspection.
+
+## Current Boundaries
+
+- Single machine and one owning process; no replication or network protocol.
+- Numeric `double` samples only; no deletes, retention policies, or SQL.
+- Uncompressed v1 blocks. Timestamp/value compression is intentionally
+  deferred until the uncompressed path has stable benchmark evidence.
+- No decoded-block cache yet.
+- Compaction loads the selected segment set into memory and runs synchronously.
+- The range API returns a vector rather than a streaming cursor.
+- File-format migration across pre-1.0 versions is not provided.
 
 ## Repository Layout
 
 ```text
-include/chronostore/      Public C++ headers
-src/                      Storage-engine implementation
-tests/                    Unit and integration tests
-tools/chronostore_cli/    Command-line application
-docs/                     Architecture and design documentation
+include/chronostore/       Public C++ headers
+src/                       Storage engine and platform I/O
+tests/                     Unit and integration tests
+tools/chronostore_cli/     Command-line client
+tools/chronostore_bench/   Reproducible benchmark driver
+tools/chronoview/          Native Dear ImGui/ImPlot inspector
+examples/                  External-style API example
+cmake/                     Package and optional GUI build modules
+docs/                      Architecture and format documentation
 ```
 
-The library currently implements the public data model, ordered in-memory
-queries, durable writes, restart recovery, and a public embedded-database API.
-The CLI remains a placeholder while immutable segments and indexed on-disk
-queries are developed.
+## Next Engineering Steps
 
-## Development Roadmap
-
-1. **Complete:** Establish the CMake build, public data model, and model tests.
-2. **Complete:** Implement an ordered in-memory table and range-query semantics.
-3. **Complete:** WAL decoding, durable append, deterministic crash recovery,
-   integrated storage-engine lifecycle, and the public database API.
-4. **In progress:** Write immutable on-disk segments with versioned binary
-   formats.
-5. Add sparse indexes and streaming multi-segment queries.
-6. Introduce background flushing and a documented concurrency model.
-7. Implement atomic manifests and segment compaction.
-8. Add timestamp/value compression and a bounded block cache.
-9. Build administration tools, Python bindings, and ChronoView.
-10. Publish reproducible benchmarks and failure-injection results.
-
-Each milestone must include focused tests and documented invariants before the
-next storage layer is introduced.
-
-## Intended Toolchain
-
-- C++20 compiler: Clang, GCC, or MSVC
-- CMake and Ninja
-- GoogleTest 1.17.0, pinned through CMake `FetchContent`
-- Google Benchmark, planned for the performance milestone
-- clang-format
-- Clang sanitizers and static analysis
-- Dear ImGui and ImPlot for the later ChronoView application
-
-Additional dependencies will be pinned when their corresponding components are
-introduced. The first test-enabled CMake configuration downloads GoogleTest.
-
-## Building
-
-Configure, build, and run the tests with:
-
-```bash
-cmake -S . -B build -G Ninja
-cmake --build build
-ctest --test-dir build --output-on-failure
-```
-
-Disable test dependencies for a library-only build with:
-
-```bash
-cmake -S . -B build -G Ninja -DBUILD_TESTING=OFF
-cmake --build build
-```
-
-Check formatting with:
-
-```bash
-clang-format --dry-run --Werror \
-  include/chronostore/model.hpp \
-  src/model.cpp \
-  tests/model_test.cpp
-```
-
-## Correctness and Performance
-
-Performance claims will be accompanied by workload definitions, machine and
-compiler details, data sizes, and latency distributions. Durability claims
-will be covered by recovery, partial-write, corruption, and failure-injection
-tests. No benchmark or reliability claim is considered complete without a
-reproducible test.
+1. Add reproducible latency percentiles and larger failure-injection runs.
+2. Add timestamp delta-of-delta and value XOR codecs behind new block flags.
+3. Introduce a bounded decoded-block cache with observable hit/eviction stats.
+4. Move flush and leveled compaction to background workers with safe reader
+   reclamation.
+5. Add deletes, retention, and a streaming query cursor.
+6. Layer optional Python or HTTP clients above the stable C++ API.
 
 ## License
 
-No open-source license has been selected yet.
+No open-source license has been selected yet. Until one is added, the source is
+publicly visible but no reuse rights are granted by default.
