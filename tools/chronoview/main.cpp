@@ -37,9 +37,12 @@ constexpr std::size_t demo_sample_count = 240U;
 
 template <std::size_t Size>
 void set_text(std::array<char, Size>& destination, std::string_view source) {
+    if (source.size() >= Size) {
+        throw std::length_error("ChronoView text field exceeds its supported size");
+    }
+
     destination.fill('\0');
-    const std::size_t count = std::min(source.size(), Size - 1U);
-    std::copy_n(source.begin(), count, destination.begin());
+    std::copy(source.begin(), source.end(), destination.begin());
 }
 
 std::string_view trim(std::string_view text) {
@@ -171,6 +174,8 @@ public:
         selected_series_ = -1;
         stats_ = {};
         clear_results();
+        status_ = "No database open";
+        status_is_error_ = false;
     }
 
     void refresh_metadata() {
@@ -197,9 +202,11 @@ public:
 
     void put_sample() {
         require_database();
-        database_->put(current_series(),
+        const chronostore::SeriesKey series = current_series();
+        database_->put(series,
                        chronostore::Sample{chronostore::Timestamp{write_timestamp_}, write_value_});
         refresh_metadata();
+        select_known_series(series);
     }
 
     void query_point() {
@@ -251,6 +258,7 @@ public:
         point_timestamp_ = demo_start_timestamp;
         write_timestamp_ = range_end_;
         refresh_metadata();
+        select_known_series(series);
         query_range();
     }
 
@@ -385,6 +393,15 @@ private:
                 static_cast<long double>(origin);
             plot_x_.push_back(static_cast<double>(offset));
             plot_y_.push_back(sample.value());
+        }
+    }
+
+    void select_known_series(const chronostore::SeriesKey& series) {
+        for (std::size_t index = 0U; index < known_series_.size(); ++index) {
+            if (known_series_[index] == series) {
+                selected_series_ = static_cast<int>(index);
+                return;
+            }
         }
     }
 

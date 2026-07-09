@@ -294,4 +294,5 @@ docs/                      Architecture and format documentation
 ## License
 
 No open-source license has been selected yet. Until one is added, the source is
-publicly visible but no reuse rights are granted by default.
+publicly visible but no reuse rights are granted by default. See
+[Third-Party Notices](THIRD_PARTY_NOTICES.md) for fetched dependency licenses.
