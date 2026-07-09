@@ -22,6 +22,7 @@ void print_usage(std::ostream& output) {
            << "  chronostore get <db> <measurement> <timestamp-ns> [key=value ...]\n"
            << "  chronostore latest <db> <measurement> [key=value ...]\n"
            << "  chronostore range <db> <measurement> <start-ns> <end-ns> [key=value ...]\n"
+           << "  chronostore series <db>\n"
            << "  chronostore stats <db>\n"
            << "  chronostore flush <db>\n"
            << "  chronostore compact <db>\n";
@@ -158,6 +159,26 @@ int run_stats(int argument_count, char* arguments[]) {
     return 0;
 }
 
+int run_series(int argument_count, char* arguments[]) {
+    if (argument_count != 3) {
+        throw std::invalid_argument("series requires exactly one database path");
+    }
+
+    const chronostore::Database database{std::filesystem::path(arguments[2])};
+
+    for (const chronostore::SeriesKey& series : database.series()) {
+        std::cout << series.measurement();
+
+        for (const chronostore::Tag& tag : series.tags()) {
+            std::cout << '\t' << tag.key() << '=' << tag.value();
+        }
+
+        std::cout << '\n';
+    }
+
+    return 0;
+}
+
 int run_maintenance(std::string_view command, int argument_count, char* arguments[]) {
     if (argument_count != 3) {
         throw std::invalid_argument(std::string(command) + " requires exactly one database path");
@@ -203,6 +224,10 @@ int main(int argument_count, char* arguments[]) {
 
         if (command == "stats") {
             return run_stats(argument_count, arguments);
+        }
+
+        if (command == "series") {
+            return run_series(argument_count, arguments);
         }
 
         if (command == "flush" || command == "compact") {

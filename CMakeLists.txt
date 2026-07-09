@@ -13,6 +13,7 @@ include(CMakePackageConfigHelpers)
 option(CHRONOSTORE_BUILD_TOOLS "Build ChronoStore command-line tools" ON)
 option(CHRONOSTORE_BUILD_EXAMPLES "Build ChronoStore examples" ON)
 option(CHRONOSTORE_BUILD_BENCHMARKS "Build ChronoStore benchmarks" ON)
+option(CHRONOSTORE_BUILD_GUI "Build the native ChronoView database inspector" OFF)
 option(CHRONOSTORE_ENABLE_SANITIZERS "Enable AddressSanitizer and UndefinedBehaviorSanitizer" OFF)
 
 function(chronostore_enable_warnings target)
@@ -130,6 +131,10 @@ if(CHRONOSTORE_BUILD_BENCHMARKS)
     chronostore_enable_sanitizers(chronostore_bench)
 endif()
 
+if(CHRONOSTORE_BUILD_GUI)
+    include(cmake/ChronoView.cmake)
+endif()
+
 if(BUILD_TESTING)
     add_subdirectory(tests)
 
@@ -156,6 +161,10 @@ install(
 
 if(CHRONOSTORE_BUILD_TOOLS)
     install(TARGETS chronostore_cli RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+endif()
+
+if(CHRONOSTORE_BUILD_GUI)
+    install(TARGETS chronoview RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 endif()
 
 install(DIRECTORY include/ DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})

@@ -386,6 +386,24 @@ std::vector<Sample> StorageEngine::range(const SeriesKey& series, Timestamp star
     return result;
 }
 
+std::vector<SeriesKey> StorageEngine::series() const {
+    std::shared_lock lock(mutex_);
+    ensure_usable();
+    std::set<SeriesKey> unique_series;
+
+    for (const SegmentReader& segment : segments_) {
+        for (const SegmentIndexEntry& entry : segment.index()) {
+            unique_series.insert(entry.series);
+        }
+    }
+
+    for (const SeriesKey& series : memtable_.series()) {
+        unique_series.insert(series);
+    }
+
+    return {unique_series.begin(), unique_series.end()};
+}
+
 std::size_t StorageEngine::sample_count() const {
     std::shared_lock lock(mutex_);
     ensure_usable();

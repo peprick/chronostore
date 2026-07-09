@@ -43,6 +43,7 @@ public:
     [[nodiscard]] std::optional<Sample> get(const SeriesKey& series, Timestamp timestamp) const;
     [[nodiscard]] std::vector<Sample> range(const SeriesKey& series, Timestamp start,
                                             Timestamp end) const;
+    [[nodiscard]] std::vector<SeriesKey> series() const;
     [[nodiscard]] std::size_t sample_count() const;
     [[nodiscard]] std::size_t memory_sample_count() const;
     [[nodiscard]] bool empty() const;

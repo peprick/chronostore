@@ -198,6 +198,21 @@ TEST_F(DatabaseTest, ManualFlushAndCompactionArePublicOperations) {
               (std::vector<Sample>{Sample{Timestamp{1}, 2.0}, Sample{Timestamp{2}, 3.0}}));
 }
 
+TEST_F(DatabaseTest, ListsUniqueSeriesAcrossMemoryAndSegments) {
+    DatabaseOptions options = buffered_options();
+    options.memtable_flush_threshold = 0U;
+    Database database(directory_, options);
+    const SeriesKey first{"cpu", {Tag{"host", "a"}}};
+    const SeriesKey second{"temperature", {Tag{"room", "lab"}}};
+
+    database.put(first, Sample{Timestamp{1}, 10.0});
+    database.flush();
+    database.put(first, Sample{Timestamp{2}, 11.0});
+    database.put(second, Sample{Timestamp{1}, 21.5});
+
+    EXPECT_EQ(database.series(), (std::vector<SeriesKey>{first, second}));
+}
+
 TEST_F(DatabaseTest, RejectsSecondOwnerOfSameDirectory) {
     Database first(directory_, buffered_options());
 

@@ -107,6 +107,17 @@ bool MemTable::empty() const noexcept {
     return sample_count_ == 0;
 }
 
+std::vector<SeriesKey> MemTable::series() const {
+    std::vector<SeriesKey> result;
+    result.reserve(series_.size());
+
+    for (const auto& entry : series_) {
+        result.push_back(entry.first);
+    }
+
+    return result;
+}
+
 std::vector<MemTableSeriesSnapshot> MemTable::snapshot() const {
     std::vector<MemTableSeriesSnapshot> result;
     result.reserve(series_.size());

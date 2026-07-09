@@ -154,6 +154,10 @@ std::vector<Sample> Database::range(const SeriesKey& series, Timestamp start, Ti
     return translate_corruption([&] { return impl.engine.range(series, start, end); });
 }
 
+std::vector<SeriesKey> Database::series() const {
+    return implementation().engine.series();
+}
+
 std::size_t Database::sample_count() const {
     return implementation().engine.sample_count();
 }

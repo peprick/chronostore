@@ -27,6 +27,7 @@ public:
 
     [[nodiscard]] std::size_t sample_count() const noexcept;
     [[nodiscard]] bool empty() const noexcept;
+    [[nodiscard]] std::vector<SeriesKey> series() const;
     [[nodiscard]] std::vector<MemTableSeriesSnapshot> snapshot() const;
 
     void clear() noexcept;
