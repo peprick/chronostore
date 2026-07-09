@@ -7,6 +7,7 @@ using chronostore::SeriesKey;
 using chronostore::Tag;
 using chronostore::Timestamp;
 using chronostore::internal::MemTable;
+using chronostore::internal::MemTableSeriesSnapshot;
 
 TEST(MemTableTest, StartsEmpty) {
     const MemTable table;
@@ -153,4 +154,25 @@ TEST(MemTableTest, RangeReturnsOverwrittenValue) {
     EXPECT_EQ(result[0].timestamp(), Timestamp(100));
     EXPECT_DOUBLE_EQ(result[0].value(), 99.0);
     EXPECT_EQ(table.sample_count(), 1U);
+}
+
+TEST(MemTableTest, SnapshotIsOrderedAndClearResetsState) {
+    MemTable table;
+    const SeriesKey beta{"beta"};
+    const SeriesKey alpha{"alpha"};
+    table.put(beta, Sample{Timestamp{20}, 2.0});
+    table.put(alpha, Sample{Timestamp{10}, 1.0});
+    table.put(alpha, Sample{Timestamp{30}, 3.0});
+
+    const std::vector<MemTableSeriesSnapshot> snapshot = table.snapshot();
+    ASSERT_EQ(snapshot.size(), 2U);
+    EXPECT_EQ(snapshot[0].series, alpha);
+    EXPECT_EQ(snapshot[0].samples,
+              (std::vector<Sample>{Sample{Timestamp{10}, 1.0}, Sample{Timestamp{30}, 3.0}}));
+    EXPECT_EQ(snapshot[1].series, beta);
+
+    table.clear();
+    EXPECT_TRUE(table.empty());
+    EXPECT_EQ(table.sample_count(), 0U);
+    EXPECT_TRUE(table.snapshot().empty());
 }

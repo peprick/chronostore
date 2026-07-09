@@ -49,6 +49,22 @@ std::optional<Sample> MemTable::latest(const SeriesKey& series) const {
     return Sample(sample_it->first, sample_it->second);
 }
 
+std::optional<Sample> MemTable::get(const SeriesKey& series, Timestamp timestamp) const {
+    const auto series_it = series_.find(series);
+
+    if (series_it == series_.end()) {
+        return std::nullopt;
+    }
+
+    const auto sample_it = series_it->second.find(timestamp);
+
+    if (sample_it == series_it->second.end()) {
+        return std::nullopt;
+    }
+
+    return Sample{sample_it->first, sample_it->second};
+}
+
 std::vector<Sample> MemTable::range(const SeriesKey& series, Timestamp start, Timestamp end) const {
     if (end < start) {
         throw std::invalid_argument("range end cannot be before start");
@@ -89,6 +105,29 @@ std::size_t MemTable::sample_count() const noexcept {
 
 bool MemTable::empty() const noexcept {
     return sample_count_ == 0;
+}
+
+std::vector<MemTableSeriesSnapshot> MemTable::snapshot() const {
+    std::vector<MemTableSeriesSnapshot> result;
+    result.reserve(series_.size());
+
+    for (const auto& [series, samples_by_timestamp] : series_) {
+        std::vector<Sample> samples;
+        samples.reserve(samples_by_timestamp.size());
+
+        for (const auto& [timestamp, value] : samples_by_timestamp) {
+            samples.emplace_back(timestamp, value);
+        }
+
+        result.push_back(MemTableSeriesSnapshot{series, std::move(samples)});
+    }
+
+    return result;
+}
+
+void MemTable::clear() noexcept {
+    series_.clear();
+    sample_count_ = 0;
 }
 
 } // namespace chronostore::internal

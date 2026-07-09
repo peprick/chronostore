@@ -6,10 +6,10 @@ market-data-style workloads. The project focuses on storage-engine internals:
 durability, binary file formats, indexing, compression, concurrency, crash
 recovery, and measurable performance.
 
-> **Project status:** Milestone 2 is complete and Milestone 3 is in progress.
-> The data model and ordered in-memory table are joined by portable binary
-> codecs, CRC32C checksums, and a versioned WAL record encoder. WAL file I/O,
-> synchronization, decoding, and crash recovery are not implemented yet.
+> **Project status:** Milestone 3 is complete and Milestone 4 is beginning.
+> ChronoStore now provides a public C++ API backed by an ordered in-memory
+> table and a durable, checksummed write-ahead log with deterministic crash
+> recovery. Immutable segment files are the next storage layer.
 
 ## Implemented
 
@@ -21,8 +21,16 @@ recovery, and measurable performance.
   and half-open `[start, end)` range queries.
 - Explicit little-endian byte encoding with bounds-checked reads.
 - Portable CRC32C corruption detection with standard known-answer coverage.
-- Versioned, length-delimited, checksummed WAL `PUT` record encoding.
-- GoogleTest integration with 38 discovered model, MemTable, and codec tests.
+- Versioned, length-delimited, checksummed WAL `PUT` encoding and decoding.
+- Cross-platform append-only WAL file I/O with buffered and sync-on-write
+  durability modes.
+- Streaming WAL recovery, incomplete-tail repair, and complete-record
+  corruption rejection.
+- Integrated storage engine with write-ahead mutation ordering and restart
+  recovery.
+- Public PImpl-based `Database` API that creates and reopens database
+  directories without exposing internal storage types.
+- GoogleTest integration with 70 discovered unit and integration tests.
 - Project-wide `clang-format` configuration.
 
 ## Project Goals
@@ -103,16 +111,18 @@ docs/                     Architecture and design documentation
 ```
 
 The library currently implements the public data model, ordered in-memory
-queries, and the encoding foundation for persistent records. The CLI remains
-a placeholder until the storage engine exposes durable operations.
+queries, durable writes, restart recovery, and a public embedded-database API.
+The CLI remains a placeholder while immutable segments and indexed on-disk
+queries are developed.
 
 ## Development Roadmap
 
 1. **Complete:** Establish the CMake build, public data model, and model tests.
 2. **Complete:** Implement an ordered in-memory table and range-query semantics.
-3. **In progress:** Complete WAL decoding, durable append, and deterministic
-   crash recovery on top of the checksummed record format.
-4. Write immutable on-disk segments with versioned binary formats.
+3. **Complete:** WAL decoding, durable append, deterministic crash recovery,
+   integrated storage-engine lifecycle, and the public database API.
+4. **In progress:** Write immutable on-disk segments with versioned binary
+   formats.
 5. Add sparse indexes and streaming multi-segment queries.
 6. Introduce background flushing and a documented concurrency model.
 7. Implement atomic manifests and segment compaction.
