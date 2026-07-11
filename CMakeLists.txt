@@ -11,18 +11,40 @@ include(GNUInstallDirs)
 include(CMakePackageConfigHelpers)
 
 set(CHRONOSTORE_TOP_LEVEL_DEFAULT ${PROJECT_IS_TOP_LEVEL})
+set(CHRONOSTORE_BUILD_CLI_DEFAULT ${CHRONOSTORE_TOP_LEVEL_DEFAULT})
+set(CHRONOSTORE_BUILD_TESTS_DEFAULT ${CHRONOSTORE_TOP_LEVEL_DEFAULT})
 
-option(CHRONOSTORE_BUILD_CLI "Build the ChronoStore command-line client" ${CHRONOSTORE_TOP_LEVEL_DEFAULT})
-option(CHRONOSTORE_BUILD_TESTS "Build the ChronoStore test suite" ${CHRONOSTORE_TOP_LEVEL_DEFAULT})
-option(CHRONOSTORE_BUILD_EXAMPLES "Build ChronoStore examples" ${CHRONOSTORE_TOP_LEVEL_DEFAULT})
+if(PROJECT_IS_TOP_LEVEL AND DEFINED BUILD_TESTING)
+    set(CHRONOSTORE_BUILD_TESTS_DEFAULT ${BUILD_TESTING})
+endif()
+
+if(DEFINED CHRONOSTORE_BUILD_TOOLS)
+    set(CHRONOSTORE_BUILD_TOOLS_VALUE ${CHRONOSTORE_BUILD_TOOLS})
+    message(DEPRECATION "CHRONOSTORE_BUILD_TOOLS is deprecated; use CHRONOSTORE_BUILD_CLI")
+
+    if(NOT DEFINED CHRONOSTORE_BUILD_CLI)
+        set(CHRONOSTORE_BUILD_CLI_DEFAULT ${CHRONOSTORE_BUILD_TOOLS_VALUE})
+    endif()
+endif()
+
+option(
+        CHRONOSTORE_BUILD_CLI
+        "Build the ChronoStore command-line client"
+        ${CHRONOSTORE_BUILD_CLI_DEFAULT}
+)
+option(
+        CHRONOSTORE_BUILD_TESTS
+        "Build the ChronoStore test suite"
+        ${CHRONOSTORE_BUILD_TESTS_DEFAULT}
+)
+option(
+        CHRONOSTORE_BUILD_EXAMPLES
+        "Build ChronoStore examples"
+        ${CHRONOSTORE_TOP_LEVEL_DEFAULT}
+)
 option(CHRONOSTORE_BUILD_BENCHMARKS "Build the ChronoStore benchmark driver" OFF)
 option(CHRONOSTORE_BUILD_GUI "Build the native ChronoView database inspector" OFF)
 option(CHRONOSTORE_ENABLE_SANITIZERS "Enable AddressSanitizer and UndefinedBehaviorSanitizer" OFF)
-
-if(DEFINED CHRONOSTORE_BUILD_TOOLS)
-    message(DEPRECATION "CHRONOSTORE_BUILD_TOOLS is deprecated; use CHRONOSTORE_BUILD_CLI")
-    set(CHRONOSTORE_BUILD_CLI ${CHRONOSTORE_BUILD_TOOLS} CACHE BOOL "Build the ChronoStore command-line client" FORCE)
-endif()
 
 configure_file(
         include/chronostore/version.hpp.in
@@ -48,7 +70,12 @@ endfunction()
 
 function(chronostore_enable_sanitizers target)
     if(CHRONOSTORE_ENABLE_SANITIZERS AND CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
-        target_compile_options(${target} PRIVATE -fsanitize=address,undefined -fno-omit-frame-pointer)
+        target_compile_options(
+                ${target}
+                PRIVATE
+                -fsanitize=address,undefined
+                -fno-omit-frame-pointer
+        )
         target_link_options(${target} PRIVATE -fsanitize=address,undefined)
     endif()
 endfunction()

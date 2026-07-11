@@ -9,8 +9,8 @@ their own licenses.
 - [GoogleTest 1.17.0](https://github.com/google/googletest/tree/v1.17.0) is
   licensed under the BSD 3-Clause License.
 
-GoogleTest is fetched only when `BUILD_TESTING=ON` and is not installed with
-the ChronoStore package.
+GoogleTest is fetched only when `CHRONOSTORE_BUILD_TESTS=ON` and is not
+installed with the ChronoStore package.
 
 ## ChronoView Dependencies
 

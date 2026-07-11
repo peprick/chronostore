@@ -1,0 +1,10 @@
+cmake_minimum_required(VERSION 3.24)
+
+project(ChronoStorePackageConsumer LANGUAGES CXX)
+
+find_package(ChronoStore 0.1 CONFIG REQUIRED)
+
+add_executable(chronostore_package_consumer main.cpp)
+target_link_libraries(chronostore_package_consumer PRIVATE ChronoStore::chronostore)
+target_compile_features(chronostore_package_consumer PRIVATE cxx_std_20)
+set_target_properties(chronostore_package_consumer PROPERTIES CXX_EXTENSIONS OFF)

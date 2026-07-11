@@ -9,10 +9,8 @@ call private storage classes.
 ## Build
 
 ```bash
-cmake -S . -B build-gui -G Ninja \
-  -DCHRONOSTORE_BUILD_GUI=ON \
-  -DBUILD_TESTING=OFF
-cmake --build build-gui --parallel
+cmake --preset gui
+cmake --build --preset gui --parallel
 ```
 
 The first configuration fetches pinned source releases:
@@ -29,14 +27,14 @@ default, so none of these dependencies affect a normal library build.
 Open or create a database directory:
 
 ```bash
-./build-gui/chronoview ./telemetry-db
+./build/gui/chronoview ./telemetry-db
 ```
 
 Open a database and populate a deterministic 240-sample series for a quick
 demonstration:
 
 ```bash
-./build-gui/chronoview ./telemetry-db --demo
+./build/gui/chronoview ./telemetry-db --demo
 ```
 
 Launching without a path opens the window without acquiring a database. Enter
@@ -67,7 +65,7 @@ a directory in the left panel and select **Open**.
 - **Flush** publishes the current MemTable as a segment and resets the WAL.
 - **Compact** merges live segments and atomically publishes their replacement.
 
-The left panel shows logical samples, current in-memory samples, live segment
+The left panel shows logical samples, current MemTable samples, live segment
 count, WAL bytes, and all discovered series.
 
 ## Ownership

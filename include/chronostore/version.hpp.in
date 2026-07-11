@@ -1,0 +1,17 @@
+#ifndef CHRONOSTORE_VERSION_HPP
+#define CHRONOSTORE_VERSION_HPP
+
+#include <string_view>
+
+namespace chronostore {
+
+// clang-format off
+inline constexpr int version_major = @PROJECT_VERSION_MAJOR@;
+inline constexpr int version_minor = @PROJECT_VERSION_MINOR@;
+inline constexpr int version_patch = @PROJECT_VERSION_PATCH@;
+inline constexpr std::string_view version_string = "@PROJECT_VERSION@";
+// clang-format on
+
+} // namespace chronostore
+
+#endif // CHRONOSTORE_VERSION_HPP

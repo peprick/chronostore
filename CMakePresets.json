@@ -1,0 +1,112 @@
+{
+  "version": 5,
+  "cmakeMinimumRequired": {
+    "major": 3,
+    "minor": 24,
+    "patch": 0
+  },
+  "configurePresets": [
+    {
+      "name": "base",
+      "hidden": true,
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/${presetName}",
+      "cacheVariables": {
+        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
+      }
+    },
+    {
+      "name": "dev",
+      "displayName": "Development",
+      "description": "Debug library, CLI, examples, and tests",
+      "inherits": "base",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "CHRONOSTORE_BUILD_CLI": "ON",
+        "CHRONOSTORE_BUILD_TESTS": "ON",
+        "CHRONOSTORE_BUILD_EXAMPLES": "ON",
+        "CHRONOSTORE_BUILD_BENCHMARKS": "OFF",
+        "CHRONOSTORE_BUILD_GUI": "OFF"
+      }
+    },
+    {
+      "name": "release",
+      "displayName": "Release",
+      "description": "Optimized library and CLI without development dependencies",
+      "inherits": "base",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "CHRONOSTORE_BUILD_CLI": "ON",
+        "CHRONOSTORE_BUILD_TESTS": "OFF",
+        "CHRONOSTORE_BUILD_EXAMPLES": "OFF",
+        "CHRONOSTORE_BUILD_BENCHMARKS": "OFF",
+        "CHRONOSTORE_BUILD_GUI": "OFF"
+      }
+    },
+    {
+      "name": "sanitizers",
+      "displayName": "Sanitizers",
+      "description": "Debug tests with AddressSanitizer and UndefinedBehaviorSanitizer",
+      "inherits": "dev",
+      "cacheVariables": {
+        "CHRONOSTORE_ENABLE_SANITIZERS": "ON"
+      }
+    },
+    {
+      "name": "benchmark",
+      "displayName": "Benchmark",
+      "description": "Optimized benchmark driver",
+      "inherits": "release",
+      "cacheVariables": {
+        "CHRONOSTORE_BUILD_BENCHMARKS": "ON"
+      }
+    },
+    {
+      "name": "gui",
+      "displayName": "ChronoView",
+      "description": "Optimized CLI and native database inspector",
+      "inherits": "release",
+      "cacheVariables": {
+        "CHRONOSTORE_BUILD_GUI": "ON"
+      }
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "dev",
+      "configurePreset": "dev"
+    },
+    {
+      "name": "release",
+      "configurePreset": "release"
+    },
+    {
+      "name": "sanitizers",
+      "configurePreset": "sanitizers"
+    },
+    {
+      "name": "benchmark",
+      "configurePreset": "benchmark"
+    },
+    {
+      "name": "gui",
+      "configurePreset": "gui"
+    }
+  ],
+  "testPresets": [
+    {
+      "name": "dev",
+      "configurePreset": "dev",
+      "output": {
+        "outputOnFailure": true
+      }
+    },
+    {
+      "name": "sanitizers",
+      "configurePreset": "sanitizers",
+      "output": {
+        "outputOnFailure": true
+      }
+    }
+  ]
+}

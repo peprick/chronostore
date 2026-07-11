@@ -4,6 +4,33 @@ All notable project changes are recorded here. ChronoStore follows semantic
 versioning for source releases; persistent format compatibility remains
 pre-1.0.
 
+## Unreleased
+
+### Added
+
+- Cross-platform GitHub Actions CI for tests, sanitizers, package consumption,
+  and ChronoView compilation.
+- CMake presets for development, release, sanitizers, benchmarks, and GUI
+  builds.
+- Public version constants and CLI `--help`, `--version`, and `sync` commands.
+- Getting-started, API, benchmark, roadmap, contribution, and security
+  documentation plus structured issue and pull-request templates.
+
+### Changed
+
+- Renamed `CHRONOSTORE_BUILD_TOOLS` to `CHRONOSTORE_BUILD_CLI`; the old option
+  remains as a deprecated compatibility alias.
+- Renamed public MemTable threshold/stat fields to include explicit sample
+  units.
+- Renamed the benchmark target and executable to `chronostore_benchmark` and
+  `chronostore-benchmark`.
+
+### Fixed
+
+- The benchmark now refuses an existing scratch path instead of deleting a
+  caller-supplied directory.
+- Generated `imgui.ini` state is no longer tracked.
+
 ## 0.1.0 - 2026-07-09
 
 ### Added
