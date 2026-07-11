@@ -481,8 +481,7 @@ void draw_sidebar(GuiState& state) {
     ImGui::Checkbox("Sync on write", &state.sync_on_write());
     ImGui::TextUnformatted("Flush threshold");
     ImGui::SetNextItemWidth(-1.0F);
-    ImGui::InputScalar("##flush_threshold", ImGuiDataType_U64,
-                       &state.flush_threshold_samples());
+    ImGui::InputScalar("##flush_threshold", ImGuiDataType_U64, &state.flush_threshold_samples());
     ImGui::EndDisabled();
 
     if (!state.connected()) {

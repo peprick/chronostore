@@ -1,0 +1,108 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-test:
+    name: ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-latest
+          - macos-latest
+          - windows-latest
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Initialize MSVC
+        if: runner.os == 'Windows'
+        uses: ilammy/msvc-dev-cmd@v1
+
+      - name: Configure
+        run: cmake --preset dev
+
+      - name: Build
+        run: cmake --build --preset dev --parallel
+
+      - name: Test
+        run: ctest --preset dev
+
+  sanitizers:
+    name: ASan and UBSan
+    runs-on: ubuntu-latest
+    env:
+      CC: clang
+      CXX: clang++
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Configure
+        run: cmake --preset sanitizers
+
+      - name: Build
+        run: cmake --build --preset sanitizers --parallel
+
+      - name: Test
+        run: ctest --preset sanitizers
+
+  package-consumer:
+    name: Installed package consumer
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Configure release
+        run: cmake --preset release
+
+      - name: Build release
+        run: cmake --build --preset release --parallel
+
+      - name: Install package
+        run: cmake --install build/release --prefix "${{ runner.temp }}/chronostore-install"
+
+      - name: Configure external consumer
+        run: >-
+          cmake -S tests/package_consumer -B build/package-consumer -G Ninja
+          -DCMAKE_BUILD_TYPE=Release
+          -DCMAKE_PREFIX_PATH="${{ runner.temp }}/chronostore-install"
+
+      - name: Build external consumer
+        run: cmake --build build/package-consumer --parallel
+
+      - name: Run external consumer
+        run: ./build/package-consumer/chronostore_package_consumer "${{ runner.temp }}/consumer-db"
+
+      - name: Verify installed CLI
+        run: "${{ runner.temp }}/chronostore-install/bin/chronostore --version"
+
+  chronoview:
+    name: ChronoView
+    runs-on: macos-latest
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Configure
+        run: cmake --preset gui
+
+      - name: Build
+        run: cmake --build --preset gui --parallel

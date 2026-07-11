@@ -1,0 +1,76 @@
+name: Bug report
+description: Report a reproducible ChronoStore defect or regression.
+title: "[Bug]: "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: Thanks for helping improve ChronoStore. Please remove sensitive database contents from examples and logs.
+
+  - type: input
+    id: version
+    attributes:
+      label: ChronoStore version or commit
+      placeholder: 0.1.0 or commit SHA
+    validations:
+      required: true
+
+  - type: input
+    id: environment
+    attributes:
+      label: Environment
+      description: Operating system, architecture, compiler, and CMake version.
+      placeholder: macOS 15 arm64, AppleClang 17, CMake 3.31
+    validations:
+      required: true
+
+  - type: dropdown
+    id: component
+    attributes:
+      label: Component
+      options:
+        - C++ library/API
+        - WAL or recovery
+        - Segment or manifest
+        - CLI
+        - ChronoView
+        - Build, install, or packaging
+        - Documentation
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Minimal reproduction
+      description: Include the smallest code sample or command sequence that reproduces the issue.
+      render: shell
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+      description: Include exact errors, stack traces, or sanitizer output when available.
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Checks
+      options:
+        - label: I searched existing issues for this problem.
+          required: true
+        - label: I removed credentials, private paths, and sensitive sample data.
+          required: true
