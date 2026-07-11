@@ -1,4 +1,5 @@
 #include <chronostore/database.hpp>
+#include <chronostore/version.hpp>
 
 #include <charconv>
 #include <cstdint>
@@ -17,15 +18,19 @@
 namespace {
 
 void print_usage(std::ostream& output) {
-    output << "Usage:\n"
+    output << "ChronoStore " << chronostore::version_string << "\n\n"
+           << "Usage:\n"
            << "  chronostore put <db> <measurement> <timestamp-ns> <value> [key=value ...]\n"
            << "  chronostore get <db> <measurement> <timestamp-ns> [key=value ...]\n"
            << "  chronostore latest <db> <measurement> [key=value ...]\n"
            << "  chronostore range <db> <measurement> <start-ns> <end-ns> [key=value ...]\n"
            << "  chronostore series <db>\n"
            << "  chronostore stats <db>\n"
+           << "  chronostore sync <db>\n"
            << "  chronostore flush <db>\n"
-           << "  chronostore compact <db>\n";
+           << "  chronostore compact <db>\n"
+           << "  chronostore --help\n"
+           << "  chronostore --version\n";
 }
 
 std::int64_t parse_timestamp(std::string_view text) {
@@ -153,7 +158,7 @@ int run_stats(int argument_count, char* arguments[]) {
     const chronostore::Database database{std::filesystem::path(arguments[2])};
     const chronostore::DatabaseStats stats = database.stats();
     std::cout << "samples\t" << stats.sample_count << '\n'
-              << "memory_samples\t" << stats.memory_sample_count << '\n'
+              << "memtable_samples\t" << stats.memtable_sample_count << '\n'
               << "segments\t" << stats.segment_count << '\n'
               << "wal_bytes\t" << stats.wal_size_bytes << '\n';
     return 0;
@@ -186,7 +191,9 @@ int run_maintenance(std::string_view command, int argument_count, char* argument
 
     chronostore::Database database{std::filesystem::path(arguments[2])};
 
-    if (command == "flush") {
+    if (command == "sync") {
+        database.sync();
+    } else if (command == "flush") {
         database.flush();
     } else {
         database.compact();
@@ -205,6 +212,16 @@ int main(int argument_count, char* arguments[]) {
         }
 
         const std::string_view command(arguments[1]);
+
+        if (command == "--help" || command == "help") {
+            print_usage(std::cout);
+            return 0;
+        }
+
+        if (command == "--version") {
+            std::cout << "chronostore " << chronostore::version_string << '\n';
+            return 0;
+        }
 
         if (command == "put") {
             return run_put(argument_count, arguments);
@@ -230,10 +247,11 @@ int main(int argument_count, char* arguments[]) {
             return run_series(argument_count, arguments);
         }
 
-        if (command == "flush" || command == "compact") {
+        if (command == "sync" || command == "flush" || command == "compact") {
             return run_maintenance(command, argument_count, arguments);
         }
 
+        std::cerr << "chronostore: unknown command: " << command << "\n\n";
         print_usage(std::cerr);
         return 1;
     } catch (const std::exception& error) {

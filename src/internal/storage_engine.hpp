@@ -17,7 +17,7 @@ namespace chronostore::internal {
 
 struct StorageEngineStats {
     std::size_t sample_count;
-    std::size_t memory_sample_count;
+    std::size_t memtable_sample_count;
     std::size_t segment_count;
     std::uint64_t wal_size_bytes;
 };
@@ -45,7 +45,7 @@ public:
                                             Timestamp end) const;
     [[nodiscard]] std::vector<SeriesKey> series() const;
     [[nodiscard]] std::size_t sample_count() const;
-    [[nodiscard]] std::size_t memory_sample_count() const;
+    [[nodiscard]] std::size_t memtable_sample_count() const;
     [[nodiscard]] bool empty() const;
     [[nodiscard]] std::size_t segment_count() const;
     [[nodiscard]] std::uint64_t wal_size_bytes() const;

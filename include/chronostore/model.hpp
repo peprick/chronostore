@@ -8,8 +8,10 @@
 
 namespace chronostore {
 
+/// A key/value dimension attached to a time series.
 class Tag {
 public:
+    /// Constructs a tag. Keys must be non-empty; values may be empty.
     Tag(std::string key, std::string value);
 
     [[nodiscard]] const std::string& key() const noexcept;
@@ -23,6 +25,10 @@ private:
     std::string value_;
 };
 
+/// The canonical identity of a time series.
+///
+/// Tags are sorted by key during construction and duplicate keys are rejected,
+/// so input tag order does not affect series identity.
 class SeriesKey {
 public:
     explicit SeriesKey(std::string measurement, std::vector<Tag> tags = {});
@@ -38,6 +44,7 @@ private:
     std::vector<Tag> tags_;
 };
 
+/// A signed Unix timestamp with nanosecond precision.
 class Timestamp {
 public:
     explicit constexpr Timestamp(std::int64_t nanoseconds_since_epoch) noexcept
@@ -54,8 +61,10 @@ private:
     std::int64_t nanoseconds_since_epoch_;
 };
 
+/// A timestamped finite IEEE 754 double-precision value.
 class Sample {
 public:
+    /// Throws std::invalid_argument when value is NaN or infinite.
     Sample(Timestamp timestamp, double value);
 
     [[nodiscard]] Timestamp timestamp() const noexcept;

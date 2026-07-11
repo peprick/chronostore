@@ -1,10 +1,13 @@
 # Build directories and generated CMake files
 build/
+build-*/
 cmake-build-*/
+install/
 CMakeFiles/
 CMakeCache.txt
 cmake_install.cmake
 compile_commands.json
+CMakeUserPresets.json
 CTestTestfile.cmake
 Testing/
 
@@ -20,6 +23,7 @@ Testing/
 # IDE and editor state
 .idea/
 .vscode/
+imgui.ini
 *.swp
 *.swo
 
@@ -30,6 +34,11 @@ Thumbs.db
 # Runtime database files
 *.chronodb
 *.wal
+demo-db/
+example-db/
+telemetry-db/
+chronostore-example-db/
+chronostore-gui-db/
 data/
 
 # Coverage and profiling output

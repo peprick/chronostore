@@ -159,27 +159,27 @@ TEST_F(DatabaseTest, MoveTransfersDatabaseOwnership) {
 
 TEST_F(DatabaseTest, AutomaticFlushPublishesSegmentAtThreshold) {
     DatabaseOptions options = buffered_options();
-    options.memtable_flush_threshold = 2U;
+    options.memtable_flush_threshold_samples = 2U;
     Database database(directory_, options);
     const SeriesKey series = public_temperature_series();
 
     database.put(series, Sample{Timestamp{1}, 10.0});
     DatabaseStats stats = database.stats();
     EXPECT_EQ(stats.sample_count, 1U);
-    EXPECT_EQ(stats.memory_sample_count, 1U);
+    EXPECT_EQ(stats.memtable_sample_count, 1U);
     EXPECT_EQ(stats.segment_count, 0U);
 
     database.put(series, Sample{Timestamp{2}, 11.0});
     stats = database.stats();
     EXPECT_EQ(stats.sample_count, 2U);
-    EXPECT_EQ(stats.memory_sample_count, 0U);
+    EXPECT_EQ(stats.memtable_sample_count, 0U);
     EXPECT_EQ(stats.segment_count, 1U);
     EXPECT_EQ(stats.wal_size_bytes, 0U);
 }
 
 TEST_F(DatabaseTest, ManualFlushAndCompactionArePublicOperations) {
     DatabaseOptions options = buffered_options();
-    options.memtable_flush_threshold = 0U;
+    options.memtable_flush_threshold_samples = 0U;
     Database database(directory_, options);
     const SeriesKey series = public_temperature_series();
 
@@ -200,7 +200,7 @@ TEST_F(DatabaseTest, ManualFlushAndCompactionArePublicOperations) {
 
 TEST_F(DatabaseTest, ListsUniqueSeriesAcrossMemoryAndSegments) {
     DatabaseOptions options = buffered_options();
-    options.memtable_flush_threshold = 0U;
+    options.memtable_flush_threshold_samples = 0U;
     Database database(directory_, options);
     const SeriesKey first{"cpu", {Tag{"host", "a"}}};
     const SeriesKey second{"temperature", {Tag{"room", "lab"}}};
@@ -254,7 +254,7 @@ TEST_F(DatabaseTest, ReportsCorruptWalThroughPublicErrorType) {
 
 TEST_F(DatabaseTest, SerializesConcurrentWriters) {
     DatabaseOptions options = buffered_options();
-    options.memtable_flush_threshold = 0U;
+    options.memtable_flush_threshold_samples = 0U;
     Database database(directory_, options);
     const SeriesKey series = public_temperature_series();
     constexpr std::size_t writer_count = 4U;

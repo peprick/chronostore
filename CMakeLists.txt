@@ -10,11 +10,25 @@ find_package(Threads REQUIRED)
 include(GNUInstallDirs)
 include(CMakePackageConfigHelpers)
 
-option(CHRONOSTORE_BUILD_TOOLS "Build ChronoStore command-line tools" ON)
-option(CHRONOSTORE_BUILD_EXAMPLES "Build ChronoStore examples" ON)
-option(CHRONOSTORE_BUILD_BENCHMARKS "Build ChronoStore benchmarks" ON)
+set(CHRONOSTORE_TOP_LEVEL_DEFAULT ${PROJECT_IS_TOP_LEVEL})
+
+option(CHRONOSTORE_BUILD_CLI "Build the ChronoStore command-line client" ${CHRONOSTORE_TOP_LEVEL_DEFAULT})
+option(CHRONOSTORE_BUILD_TESTS "Build the ChronoStore test suite" ${CHRONOSTORE_TOP_LEVEL_DEFAULT})
+option(CHRONOSTORE_BUILD_EXAMPLES "Build ChronoStore examples" ${CHRONOSTORE_TOP_LEVEL_DEFAULT})
+option(CHRONOSTORE_BUILD_BENCHMARKS "Build the ChronoStore benchmark driver" OFF)
 option(CHRONOSTORE_BUILD_GUI "Build the native ChronoView database inspector" OFF)
 option(CHRONOSTORE_ENABLE_SANITIZERS "Enable AddressSanitizer and UndefinedBehaviorSanitizer" OFF)
+
+if(DEFINED CHRONOSTORE_BUILD_TOOLS)
+    message(DEPRECATION "CHRONOSTORE_BUILD_TOOLS is deprecated; use CHRONOSTORE_BUILD_CLI")
+    set(CHRONOSTORE_BUILD_CLI ${CHRONOSTORE_BUILD_TOOLS} CACHE BOOL "Build the ChronoStore command-line client" FORCE)
+endif()
+
+configure_file(
+        include/chronostore/version.hpp.in
+        ${PROJECT_BINARY_DIR}/generated/chronostore/version.hpp
+        @ONLY
+)
 
 function(chronostore_enable_warnings target)
     if(MSVC)
@@ -65,6 +79,7 @@ target_include_directories(
         chronostore
         PUBLIC
         $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/include>
+        $<BUILD_INTERFACE:${PROJECT_BINARY_DIR}/generated>
         $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
         PRIVATE
         ${PROJECT_SOURCE_DIR}/src
@@ -93,9 +108,7 @@ set_target_properties(
 chronostore_enable_warnings(chronostore)
 chronostore_enable_sanitizers(chronostore)
 
-include(CTest)
-
-if(CHRONOSTORE_BUILD_TOOLS)
+if(CHRONOSTORE_BUILD_CLI)
     add_executable(
             chronostore_cli
             tools/chronostore_cli/main.cpp
@@ -110,7 +123,7 @@ if(CHRONOSTORE_BUILD_TOOLS)
     target_link_libraries(
             chronostore_cli
             PRIVATE
-            chronostore
+            ChronoStore::chronostore
     )
 
     chronostore_enable_warnings(chronostore_cli)
@@ -125,20 +138,22 @@ if(CHRONOSTORE_BUILD_EXAMPLES)
 endif()
 
 if(CHRONOSTORE_BUILD_BENCHMARKS)
-    add_executable(chronostore_bench tools/chronostore_bench/main.cpp)
-    target_link_libraries(chronostore_bench PRIVATE ChronoStore::chronostore)
-    chronostore_enable_warnings(chronostore_bench)
-    chronostore_enable_sanitizers(chronostore_bench)
+    add_executable(chronostore_benchmark tools/chronostore_benchmark/main.cpp)
+    set_target_properties(chronostore_benchmark PROPERTIES OUTPUT_NAME chronostore-benchmark)
+    target_link_libraries(chronostore_benchmark PRIVATE ChronoStore::chronostore)
+    chronostore_enable_warnings(chronostore_benchmark)
+    chronostore_enable_sanitizers(chronostore_benchmark)
 endif()
 
 if(CHRONOSTORE_BUILD_GUI)
     include(cmake/ChronoView.cmake)
 endif()
 
-if(BUILD_TESTING)
+if(CHRONOSTORE_BUILD_TESTS)
+    enable_testing()
     add_subdirectory(tests)
 
-    if(CHRONOSTORE_BUILD_TOOLS)
+    if(CHRONOSTORE_BUILD_CLI)
         add_test(
                 NAME ChronoStoreCliSmoke
                 COMMAND
@@ -159,7 +174,7 @@ install(
         INCLUDES DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
 )
 
-if(CHRONOSTORE_BUILD_TOOLS)
+if(CHRONOSTORE_BUILD_CLI)
     install(TARGETS chronostore_cli RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 endif()
 
@@ -167,7 +182,16 @@ if(CHRONOSTORE_BUILD_GUI)
     install(TARGETS chronoview RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 endif()
 
-install(DIRECTORY include/ DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
+install(
+        DIRECTORY include/
+        DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
+        FILES_MATCHING PATTERN "*.hpp"
+)
+
+install(
+        FILES ${PROJECT_BINARY_DIR}/generated/chronostore/version.hpp
+        DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/chronostore
+)
 
 configure_package_config_file(
         cmake/ChronoStoreConfig.cmake.in

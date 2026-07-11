@@ -82,11 +82,11 @@ public:
     Impl(const std::filesystem::path& directory, const std::filesystem::path& wal_path,
          DatabaseOptions options)
         : lock(directory / "LOCK"), engine(wal_path, to_internal_durability(options.durability)),
-          flush_threshold(options.memtable_flush_threshold) {}
+          flush_threshold_samples(options.memtable_flush_threshold_samples) {}
 
     internal::DatabaseLock lock;
     internal::StorageEngine engine;
-    std::size_t flush_threshold;
+    std::size_t flush_threshold_samples;
 };
 
 Database::Database(std::filesystem::path directory, DatabaseOptions options) : impl_(nullptr) {
@@ -120,7 +120,8 @@ void Database::put(SeriesKey series, Sample sample) {
     Impl& impl = implementation();
     translate_corruption([&] { impl.engine.put(std::move(series), std::move(sample)); });
 
-    if (impl.flush_threshold != 0U && impl.engine.memory_sample_count() >= impl.flush_threshold) {
+    if (impl.flush_threshold_samples != 0U &&
+        impl.engine.memtable_sample_count() >= impl.flush_threshold_samples) {
         translate_corruption([&] { impl.engine.flush(); });
     }
 }
@@ -168,7 +169,7 @@ bool Database::empty() const {
 
 DatabaseStats Database::stats() const {
     const internal::StorageEngineStats stats = implementation().engine.stats();
-    return DatabaseStats{stats.sample_count, stats.memory_sample_count, stats.segment_count,
+    return DatabaseStats{stats.sample_count, stats.memtable_sample_count, stats.segment_count,
                          stats.wal_size_bytes};
 }
 

@@ -38,7 +38,7 @@ target_include_directories(
 target_link_libraries(
         chronostore_tests
         PRIVATE
-        chronostore
+        ChronoStore::chronostore
         GTest::gtest_main
 )
 

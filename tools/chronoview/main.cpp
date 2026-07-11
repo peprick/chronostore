@@ -1,4 +1,5 @@
 #include <chronostore/database.hpp>
+#include <chronostore/version.hpp>
 
 #include <imgui.h>
 #include <imgui_impl_glfw.h>
@@ -149,14 +150,15 @@ public:
             return;
         }
 
-        if (flush_threshold_ > std::numeric_limits<std::size_t>::max()) {
+        if (flush_threshold_samples_ > std::numeric_limits<std::size_t>::max()) {
             throw std::invalid_argument("flush threshold is too large");
         }
 
         chronostore::DatabaseOptions options;
         options.durability = sync_on_write_ ? chronostore::Durability::sync_on_write
                                             : chronostore::Durability::buffered;
-        options.memtable_flush_threshold = static_cast<std::size_t>(flush_threshold_);
+        options.memtable_flush_threshold_samples =
+            static_cast<std::size_t>(flush_threshold_samples_);
 
         auto opened = std::make_unique<chronostore::Database>(
             std::filesystem::path(database_path_.data()), options);
@@ -300,8 +302,8 @@ public:
         return sync_on_write_;
     }
 
-    [[nodiscard]] std::uint64_t& flush_threshold() noexcept {
-        return flush_threshold_;
+    [[nodiscard]] std::uint64_t& flush_threshold_samples() noexcept {
+        return flush_threshold_samples_;
     }
 
     [[nodiscard]] std::int64_t& point_timestamp() noexcept {
@@ -417,7 +419,7 @@ private:
     std::array<char, measurement_capacity> measurement_{};
     std::array<char, tags_capacity> tags_{};
     bool sync_on_write_{true};
-    std::uint64_t flush_threshold_{4096U};
+    std::uint64_t flush_threshold_samples_{4096U};
     std::int64_t point_timestamp_{demo_start_timestamp};
     std::int64_t range_start_{demo_start_timestamp};
     std::int64_t range_end_{demo_start_timestamp +
@@ -454,7 +456,7 @@ void draw_stats(const chronostore::DatabaseStats& stats) {
         };
 
         row("Samples", stats.sample_count);
-        row("In memory", stats.memory_sample_count);
+        row("In MemTable", stats.memtable_sample_count);
         row("Segments", stats.segment_count);
         row("WAL bytes", stats.wal_size_bytes);
         ImGui::EndTable();
@@ -479,7 +481,8 @@ void draw_sidebar(GuiState& state) {
     ImGui::Checkbox("Sync on write", &state.sync_on_write());
     ImGui::TextUnformatted("Flush threshold");
     ImGui::SetNextItemWidth(-1.0F);
-    ImGui::InputScalar("##flush_threshold", ImGuiDataType_U64, &state.flush_threshold());
+    ImGui::InputScalar("##flush_threshold", ImGuiDataType_U64,
+                       &state.flush_threshold_samples());
     ImGui::EndDisabled();
 
     if (!state.connected()) {
@@ -725,7 +728,8 @@ void draw_application(GuiState& state) {
     ImGui::Begin("ChronoViewRoot", nullptr, root_flags);
     ImGui::TextColored(ImVec4{0.25F, 0.82F, 0.78F, 1.0F}, "ChronoView");
     ImGui::SameLine();
-    ImGui::TextDisabled("ChronoStore 0.1");
+    ImGui::TextDisabled("ChronoStore %.*s", static_cast<int>(chronostore::version_string.size()),
+                        chronostore::version_string.data());
     ImGui::Separator();
 
     const float sidebar_width = std::min(340.0F, ImGui::GetContentRegionAvail().x * 0.32F);

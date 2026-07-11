@@ -415,7 +415,7 @@ std::size_t StorageEngine::sample_count() const {
     return static_cast<std::size_t>(logical_sample_count_);
 }
 
-std::size_t StorageEngine::memory_sample_count() const {
+std::size_t StorageEngine::memtable_sample_count() const {
     std::shared_lock lock(mutex_);
     ensure_usable();
     return memtable_.sample_count();
