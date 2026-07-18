@@ -254,7 +254,7 @@ understandable baseline. See the [Roadmap](docs/roadmap.md).
 ## Contributing
 
 Contributions are welcome. Start with [CONTRIBUTING.md](CONTRIBUTING.md), use
-the issue templates for bugs and proposals, and report vulnerabilities through
+the issue templates for bugs and proposals and report vulnerabilities through
 the private process in [SECURITY.md](SECURITY.md).
 
 The CI matrix builds and tests Linux, macOS, and Windows; runs ASan/UBSan;
