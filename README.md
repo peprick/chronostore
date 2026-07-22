@@ -9,7 +9,7 @@
 ChronoStore is a small embedded time-series storage engine for C++20. It stores
 nanosecond-resolution numeric samples under canonical measurement/tag keys and
 provides durable writes, exact and range queries, immutable indexed segments,
-crash recovery, compaction, a CLI, and a native inspector.
+crash-recovery, compaction, a CLI, and a native inspector.
 
 The engine is intentionally single-node and inspectable. Its WAL, manifest,
 segment format, recovery rules, and concurrency model are implemented in this
