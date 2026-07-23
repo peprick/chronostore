@@ -245,3 +245,10 @@ install(
         NAMESPACE ChronoStore::
         DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/ChronoStore
 )
+
+install(
+        FILES
+        LICENSE
+        THIRD_PARTY_NOTICES.md
+        DESTINATION ${CMAKE_INSTALL_DATAROOTDIR}/doc/ChronoStore
+)

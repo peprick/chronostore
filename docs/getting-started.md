@@ -118,7 +118,7 @@ target_link_libraries(my_application PRIVATE ChronoStore::chronostore)
 
 Configure that project with `-DCMAKE_PREFIX_PATH=/path/to/chronostore/install`.
 The installation contains the static library, public headers, CMake package
-metadata, and the CLI when enabled.
+metadata, the CLI when enabled, and the project license and dependency notices.
 
 ## Common Problems
 

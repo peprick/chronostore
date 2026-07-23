@@ -78,6 +78,11 @@ jobs:
       - name: Install package
         run: cmake --install build/release --prefix "${{ runner.temp }}/chronostore-install"
 
+      - name: Verify installed legal files
+        run: |
+          test -f "${{ runner.temp }}/chronostore-install/share/doc/ChronoStore/LICENSE"
+          test -f "${{ runner.temp }}/chronostore-install/share/doc/ChronoStore/THIRD_PARTY_NOTICES.md"
+
       - name: Configure external consumer
         run: >-
           cmake -S tests/package_consumer -B build/package-consumer -G Ninja

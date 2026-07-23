@@ -5,6 +5,7 @@
 ![CMake 3.24+](https://img.shields.io/badge/CMake-3.24%2B-064F8C?logo=cmake&logoColor=white)
 ![Version 0.1.0](https://img.shields.io/badge/version-0.1.0-2F855A)
 ![Status](https://img.shields.io/badge/status-alpha-E6A23C)
+[![License: MIT](https://img.shields.io/badge/license-MIT-2F855A)](LICENSE)
 
 ChronoStore is a small embedded time-series storage engine for C++20. It stores
 nanosecond-resolution numeric samples under canonical measurement/tag keys and
@@ -263,7 +264,6 @@ ChronoView on macOS.
 
 ## License
 
-No open-source license has been selected yet. Until a `LICENSE` file is added,
-the repository is source-available for evaluation but does not grant reuse or
-redistribution rights. Dependency licenses are listed in
+ChronoStore is available under the [MIT License](LICENSE). Dependency licenses
+and required notices are listed in
 [Third-Party Notices](THIRD_PARTY_NOTICES.md).

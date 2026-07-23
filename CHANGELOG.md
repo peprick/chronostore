@@ -15,6 +15,8 @@ pre-1.0.
 - Public version constants and CLI `--help`, `--version`, and `sync` commands.
 - Getting-started, API, benchmark, roadmap, contribution, and security
   documentation plus structured issue and pull-request templates.
+- MIT licensing for ChronoStore, including installed license and dependency
+  notices.
 
 ### Changed
 

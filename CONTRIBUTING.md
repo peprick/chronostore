@@ -77,3 +77,8 @@ multi-threaded coverage rather than timing-only assertions.
 Keep pull requests focused. Explain the behavioral change, affected invariants,
 compatibility impact, and exact verification performed. Do not commit build
 directories, generated databases, `imgui.ini`, or editor state.
+
+## Licensing
+
+By contributing to ChronoStore, you agree that your contributions will be
+licensed under the repository's [MIT License](LICENSE).
